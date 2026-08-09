@@ -1,0 +1,15 @@
+2026-08-09T16:12:21.115Z Account: 0x589602ef4396Cd78979237e00ec5E0E1165Ef845 (ephemeral, gasless studionet, no funding needed)
+2026-08-09T16:12:21.119Z -> NO scenario create: submitting create_market(pravax-no-1)
+2026-08-09T16:12:23.467Z    tx 0x61cb71375ed0437ecf5b5a8bbb7927011693017f728148793ac6a660598723e4
+2026-08-09T16:16:46.228Z    status=5 result=6
+2026-08-09T16:16:50.234Z -> NO scenario lock: submitting lock_market(pravax-no-1)
+2026-08-09T16:16:52.012Z    tx 0x69aa653ddb938c080366f45bd776ab5a95aa37297f790e7ae364398851a5f6e1
+2026-08-09T16:17:46.431Z    status=5 result=6
+2026-08-09T16:17:50.445Z -> NO scenario resolve: submitting resolve_market(pravax-no-1)
+2026-08-09T16:17:52.201Z    tx 0x1e2b9cc7372b57fbc96dc705ec446b8b5171e3d053e79bfb0e97305e3220c2c9
+FATAL Error: Timed out waiting for transaction 0x1e2b9cc7372b57fbc96dc705ec446b8b5171e3d053e79bfb0e97305e3220c2c9 to reach status "ACCEPTED" (current status: 1).
+    at Object.waitForTransactionReceipt (file:///C:/Users/ojiku/Desktop/Pravax/node_modules/genlayer-js/dist/index.js:1484:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async withRateLimitRetry (C:\Users\ojiku\Desktop\Pravax\scripts\populate-verdicts.js:29:14)
+    at async writeAndWait (C:\Users\ojiku\Desktop\Pravax\scripts\populate-verdicts.js:56:19)
+    at async C:\Users\ojiku\Desktop\Pravax\scripts\populate-verdicts.js:143:5

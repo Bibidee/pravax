@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+:root {
+  --canvas: #faf8f3;
+  --canvas-raised: #ffffff;
+  --ink: #14120f;
+  --ink-muted: #57534a;
+  --ink-faint: #8a857a;
+  --border: #ddd7c8;
+  --border-strong: #b9b19d;
+  --accent: #1f5f4d;
+  --accent-soft: #e4efe9;
+  --yes: #1f5f4d;
+  --no: #8a3a2b;
+  --unresolved: #8a6d1f;
+  --invalid: #6b6459;
+  --danger: #9c2c1f;
+  --hue-blue: #2b5fd9;
+  --hue-violet: #7c3aed;
+  --hue-orange: #e0741f;
+  --hue-pink: #d13d7e;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-canvas-raised: var(--canvas-raised);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-yes: var(--yes);
+  --color-no: var(--no);
+  --color-unresolved: var(--unresolved);
+  --color-invalid: var(--invalid);
+  --color-danger: var(--danger);
+  --color-hue-blue: var(--hue-blue);
+  --color-hue-violet: var(--hue-violet);
+  --color-hue-orange: var(--hue-orange);
+  --color-hue-pink: var(--hue-pink);
+  --font-sans: var(--font-ui);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #121110;
+    --canvas-raised: #1a1815;
+    --ink: #f2efe8;
+    --ink-muted: #b8b2a4;
+    --ink-faint: #85806f;
+    --border: #322f28;
+    --border-strong: #4a453b;
+    --accent: #5fb894;
+    --accent-soft: #1c2d26;
+    --yes: #5fb894;
+    --no: #d97a63;
+    --unresolved: #d9b25f;
+    --invalid: #9a9585;
+    --danger: #e05f4c;
+    --hue-blue: #6690ff;
+    --hue-violet: #a682f5;
+    --hue-orange: #f0a05f;
+    --hue-pink: #ed7ab0;
+  }
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 32%),
+    radial-gradient(circle at 92% 6%, color-mix(in srgb, var(--hue-violet) 10%, transparent) 0%, transparent 30%),
+    radial-gradient(circle at 100% 100%, color-mix(in srgb, var(--hue-orange) 8%, transparent) 0%, transparent 30%),
+    var(--canvas);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

@@ -1,0 +1,38 @@
+2026-08-09T16:07:03.297Z Account: 0x016e9906e62a11DC7C717Da6fAb4160875BC9c61 (ephemeral, gasless studionet, no funding needed)
+2026-08-09T16:07:03.313Z -> YES scenario create: submitting create_market(pravax-yes-1)
+2026-08-09T16:07:05.802Z    tx 0x0520f9cd44dc7c18f60f75d346fae0b5338e5348ace0a61b0b5a0a2bfd1cffb9
+2026-08-09T16:10:31.413Z    status=5 result=6
+2026-08-09T16:10:31.413Z -> YES scenario lock: submitting lock_market(pravax-yes-1)
+2026-08-09T16:10:32.962Z    tx 0x42a07150b877af4c817f3d0c41e17b451894388adb6c5bc566ee49d3f29c98e4
+2026-08-09T16:10:43.221Z    status=5 result=6
+2026-08-09T16:10:43.222Z -> YES scenario resolve: submitting resolve_market(pravax-yes-1)
+2026-08-09T16:10:44.789Z    tx 0x77cb6a6858407cb4c9810e31cf4bfd57a571033dbce6d10c8b234938ca809922
+2026-08-09T16:11:28.279Z    status=5 result=6
+2026-08-09T16:11:29.610Z    RESOLUTION for pravax-yes-1: {"confidence": 1, "conflicts": [], "evidence": [{"claim": "Python is described as a 'programming language' in the homepage text: 'Python is a programming language that lets you work quickly and integrate systems more effectively.'", "event_time": "2026-08-09T16:10:32Z", "source_role": "PRIMARY", "url": "https://www.python.org/"}], "reasoning_summary": "The primary source explicitly describes Python as a programming language in the homepage text, satisfying the resolution condition for YES. No conflicting evidence or ambiguity is present.", "resolved_at": "2026-08-09T16:10:44Z", "rule_interpretation": "The resolution constitution defines the condition for YES as: 'python.org's own homepage text describes Python as a programming language.' The primary source (https://www.python.org/) is clear and accessible, and it explicitly states: 'Python is a programming language that lets you work quickly and integrate systems more effectively.' This matches the definition precisely.", "verdict": "YES"}
+=====
+2026-08-09T16:11:29.610Z -> NO scenario create: submitting create_market(pravax-no-1)
+GenLayer RPC error (eth_getTransactionCount): Rate limit exceeded: 30 requests per minute
+FATAL UnknownRpcError: An unknown RPC error occurred.
+
+Details: Rate limit exceeded: 30 requests per minute
+Version: viem@2.55.11
+    at withRetry.delay.count.count (file:///C:/Users/ojiku/Desktop/Pravax/node_modules/viem/_esm/utils/buildRequest.js:127:31)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async attemptRetry (file:///C:/Users/ojiku/Desktop/Pravax/node_modules/viem/_esm/utils/promise/withRetry.js:24:30) {
+  details: 'Rate limit exceeded: 30 requests per minute',
+  docsPath: undefined,
+  metaMessages: undefined,
+  shortMessage: 'An unknown RPC error occurred.',
+  version: '2.55.11',
+  code: -1,
+  [cause]: {
+    code: -32029,
+    message: 'Rate limit exceeded: 30 requests per minute',
+    data: {
+      window: 'minute',
+      limit: 30,
+      current: 30,
+      retry_after_seconds: 60
+    }
+  }
+}

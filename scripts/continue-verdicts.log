@@ -1,0 +1,31 @@
+2026-08-09T18:41:17.722Z Retry account: 0x0D98aD4F75334966Db30120b735533892bff8Fa9
+2026-08-09T18:41:17.735Z === Retrying resolution for pravax-no-1 ===
+2026-08-09T18:41:17.735Z -> pravax-no-1 resolve (try 1): submitting resolve_market(pravax-no-1)
+2026-08-09T18:41:20.924Z    tx 0x09c2832d04c11bde0f4acb61dcbc9a05d76eea46970183ab5eab7ea684556c24
+2026-08-09T18:44:45.629Z    still pending after initial wait, continuing to poll tx directly...
+2026-08-09T18:46:55.991Z    status=ACCEPTED result=MAJORITY_AGREE
+2026-08-09T18:47:02.030Z RESOLUTION pravax-no-1: {"confidence": 99, "conflicts": [], "evidence": [{"claim": "NASA's official homepage contains no statement confirming that the Sun orbits the Earth. Content relates to space missions, spacewalks, telescopes, and general NASA activities. No geocentric claim is present.", "published_at": "2026-08-07", "source_role": "PRIMARY", "url": "https://www.nasa.gov/"}], "reasoning_summary": "The primary source (NASA's official website) was successfully retrieved. The content makes no geocentric claim whatsoever \u2014 it does not state that the Sun orbits the Earth. Under the resolution constitution, the outcome is NO if the site 'does not confirm the claim.' The site clearly does not confirm any geocentric claim, so the verdict is NO with very high confidence.", "resolved_at": "2026-08-09T18:41:20Z", "rule_interpretation": "The resolution constitution states: YES only if NASA's official site explicitly confirms a geocentric claim; NO if it describes the heliocentric model or does not confirm the claim. The NASA homepage does not contain any geocentric claim, and therefore the condition for NO is satisfied ('does not confirm the claim').", "verdict": "NO"}
+=====
+2026-08-09T18:47:07.064Z -> INVALID scenario create: submitting create_market(pravax-invalid-1)
+2026-08-09T18:47:09.398Z    tx 0xd05628b888a89bb5ee8be78e064acdb12856b30eed35e12bb77025279b42cd56
+2026-08-09T18:48:03.986Z    status=5 result=MAJORITY_AGREE
+2026-08-09T18:48:07.986Z -> INVALID scenario lock: submitting lock_market(pravax-invalid-1)
+2026-08-09T18:48:10.321Z    tx 0x155c58336f4b4f40ced34133f9c53a90d458e65680d342a1be7cb2b4ea5a17b1
+2026-08-09T18:50:46.626Z    status=5 result=MAJORITY_AGREE
+2026-08-09T18:50:50.632Z -> pravax-invalid-1 resolve (try 1): submitting resolve_market(pravax-invalid-1)
+2026-08-09T18:50:53.144Z    tx 0x473fb501993c38630f9b39a2438966c431037915a31929111261d849a02b2823
+2026-08-09T18:51:54.786Z    status=5 result=MAJORITY_AGREE
+2026-08-09T18:52:00.572Z RESOLUTION pravax-invalid-1: {"confidence": 100, "conflicts": [], "evidence": [{"claim": "The URL returns HTTP 404 'File not Found' \u2014 the page does not exist and is inaccessible.", "source_role": "PRIMARY", "url": "https://www.python.org/pravax-nonexistent-page-test-404"}], "reasoning_summary": "The sole primary source URL returned a 404 error at resolution time. The locked resolution constitution explicitly lists 'the primary source URL is inaccessible or returns an error at resolution time' as an invalidation condition. Since the URL returned a 404 status code (an error), the invalidation condition is unambiguously met. The market resolves INVALID.", "resolved_at": "2026-08-09T18:50:52Z", "rule_interpretation": "The resolution constitution states the market is INVALID if 'the primary source URL is inaccessible or returns an error at resolution time.' The primary source URL returned a 404 HTTP status code, which is an error. This invalidation condition is explicitly met, so the verdict must be INVALID regardless of any other considerations.", "verdict": "INVALID"}
+=====
+2026-08-09T18:52:05.582Z -> UNRESOLVED scenario create: submitting create_market(pravax-unresolved-1)
+2026-08-09T18:52:07.705Z    tx 0xa5513405c6c42394c2da70c2aec78008a6c30da3ff597bc348a96757c87dfdb4
+2026-08-09T18:54:51.186Z    status=5 result=MAJORITY_AGREE
+2026-08-09T18:54:55.195Z -> UNRESOLVED scenario lock: submitting lock_market(pravax-unresolved-1)
+2026-08-09T18:54:57.961Z    tx 0xc0644d58e02b6be4f01bae2687117a064a8685f797c68028f6e3d074ecee0cb8
+2026-08-09T18:55:04.977Z    status=5 result=MAJORITY_AGREE
+2026-08-09T18:55:08.992Z -> pravax-unresolved-1 resolve (try 1): submitting resolve_market(pravax-unresolved-1)
+2026-08-09T18:55:11.539Z    tx 0xa72b94c93bf176304c694b975d20b80bde5daa79ed6465d79343fd85d9bcd858
+2026-08-09T18:56:06.600Z    status=5 result=MAJORITY_AGREE
+2026-08-09T18:56:12.358Z RESOLUTION pravax-unresolved-1: {"confidence": 1, "conflicts": [], "evidence": [{"claim": "The website contains general news and updates regarding Python 3.14/3.15 releases and PSF grants, but makes no mention of a private email sent on 15 June 2026 proposing a module deprecation.", "event_time": "2026-06-15", "published_at": "2026-08-09T18:52:07Z", "source_role": "PRIMARY", "url": "https://www.python.org/"}], "reasoning_summary": "The primary source (python.org) was reviewed and contains no record or public confirmation of the specific private email described in the question. Since the event (a private email) is by nature unverifiable without public disclosure and the primary source is silent, the ambiguity policy requiring UNRESOLVED in the absence of public evidence must be applied.", "resolved_at": "2026-08-09T18:55:10Z", "rule_interpretation": "The market resolves YES only if there is public confirmation of the specific private email. According to the ambiguity policy, if there is no public evidence available to confirm or deny a private, unverifiable event, the verdict must be UNRESOLVED.", "verdict": "UNRESOLVED"}
+=====
+2026-08-09T18:56:18.988Z Final protocol stats: {"markets_created": 5, "markets_locked": 4, "markets_resolved": 4, "markets_finalized": 0, "challenges_filed": 0}
