@@ -1,9 +1,23 @@
-import Link from "next/link";
-import { listMarketViews } from "@/lib/data/market";
-import { MarketCard } from "@/components/MarketCard";
+"use client";
 
-export default async function Home() {
-  const markets = await listMarketViews();
+import Link from "next/link";
+import { MarketCard } from "@/components/MarketCard";
+import { DEMO_MARKETS } from "@/lib/demo/seedMarkets";
+import { useWallet } from "@/lib/wallet/useWallet";
+import { useMyMarkets } from "@/lib/hooks/useMyMarkets";
+
+export default function Home() {
+  const { address } = useWallet();
+  const { markets: myMarkets } = useMyMarkets(address);
+
+  const demo = DEMO_MARKETS.map((d) => ({
+    id: d.id,
+    market: d.market,
+    resolution: d.resolution,
+    challenges: d.challenges ?? [],
+    isDemo: true,
+  }));
+  const markets = [...myMarkets, ...demo];
   const open = markets.filter((m) => m.market.state === "OPEN");
   const resolved = markets.filter((m) => ["FINAL", "UNRESOLVED", "INVALID"].includes(m.market.state));
 
@@ -54,7 +68,7 @@ export default async function Home() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {open.map((m) => (
-            <MarketCard key={m.id} id={m.id} market={m.market} isDemo={m.isDemo} yesPercent={64} />
+            <MarketCard key={m.id} id={m.id} market={m.market} isDemo={m.isDemo} yesPercent={m.isDemo ? 64 : undefined} />
           ))}
         </div>
       </section>

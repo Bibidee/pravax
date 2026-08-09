@@ -30,6 +30,20 @@ export function useWallet() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.ethereum) return;
+
+    // Silently restore an already-authorized connection on load/refresh —
+    // eth_accounts (unlike eth_requestAccounts) never prompts the user, it
+    // just returns accounts the site was previously granted.
+    window.ethereum
+      .request({ method: "eth_accounts" })
+      .then((accounts) => {
+        const list = accounts as string[];
+        if (list.length > 0) {
+          setState((s) => ({ ...s, address: list[0] as `0x${string}` }));
+        }
+      })
+      .catch(() => {});
+
     const handleAccountsChanged = (...args: unknown[]) => {
       const accounts = args[0] as string[];
       setState((s) => ({ ...s, address: (accounts[0] as `0x${string}`) ?? null }));
