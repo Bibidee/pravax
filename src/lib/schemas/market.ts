@@ -1,5 +1,19 @@
 import { z } from "zod";
 
+// z.string().url() alone accepts any syntactically valid URL scheme — a typo
+// like "ttps://example.com" (missing the leading "h") still parses as a
+// technically valid URL with a custom scheme, so it passes silently. Since
+// primary/secondary sources get locked immutably on-chain and are what
+// GenVM actually fetches during resolution, require http(s) explicitly so a
+// broken source is caught in the composer, not discovered after lock via a
+// failed web fetch.
+const httpUrl = z
+  .string()
+  .url("Must be a valid URL")
+  .refine((url) => /^https?:\/\//i.test(url), {
+    message: "URL must start with http:// or https://",
+  });
+
 export const MarketStateSchema = z.enum([
   "DRAFT",
   "OPEN",
@@ -30,8 +44,8 @@ export const ResolutionConstitutionSchema = z.object({
   close_at: z.string().min(1, "Close at is required").datetime({ offset: true }).or(z.string().min(1, "Close at is required")),
   resolve_after: z.string().min(1, "Resolves after is required").datetime({ offset: true }).or(z.string().min(1, "Resolves after is required")),
   event_deadline: z.string().min(1, "Event deadline is required").datetime({ offset: true }).or(z.string().min(1, "Event deadline is required")),
-  primary_sources: z.array(z.string().url()).min(1, "At least one primary source is required"),
-  secondary_sources: z.array(z.string().url()).default([]),
+  primary_sources: z.array(httpUrl).min(1, "At least one primary source is required"),
+  secondary_sources: z.array(httpUrl).default([]),
   definition: z.string().min(10, "Define exactly what counts as a qualifying event"),
   invalid_if: z.array(z.string()).default([]),
   ambiguity_policy: z.string().min(10, "State how ambiguous or conflicting evidence is handled"),

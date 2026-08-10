@@ -8,7 +8,7 @@ import { VerdictPanel } from "@/components/VerdictPanel";
 import { EmptyState } from "@/components/EmptyState";
 import { TransactionStatus, type TxState } from "@/components/TransactionStatus";
 import { useWallet } from "@/lib/wallet/useWallet";
-import { pravax } from "@/lib/genlayer/contracts/pravax";
+import { pravax, TransactionPendingError } from "@/lib/genlayer/contracts/pravax";
 
 export function ChallengeClient({ view }: { view: MarketView }) {
   const router = useRouter();
@@ -71,6 +71,12 @@ export function ChallengeClient({ view }: { view: MarketView }) {
       setState("finalized");
       router.refresh();
     } catch (err) {
+      if (err instanceof TransactionPendingError) {
+        setState("pending");
+        setError("Still processing on-chain — refresh the page shortly to check.");
+        router.refresh();
+        return;
+      }
       setState("failed");
       setError(err instanceof Error ? err.message : "Challenge submission failed");
     }

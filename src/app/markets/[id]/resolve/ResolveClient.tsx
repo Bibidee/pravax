@@ -7,7 +7,7 @@ import { TransactionStatus, type TxState } from "@/components/TransactionStatus"
 import { EmptyState } from "@/components/EmptyState";
 import { VerdictPanel } from "@/components/VerdictPanel";
 import { useWallet } from "@/lib/wallet/useWallet";
-import { pravax } from "@/lib/genlayer/contracts/pravax";
+import { pravax, TransactionPendingError } from "@/lib/genlayer/contracts/pravax";
 import { formatUtc, countdownLabel } from "@/lib/format";
 import { isPast } from "date-fns";
 
@@ -58,6 +58,16 @@ export function ResolveClient({ view }: { view: MarketView }) {
       setState("finalized");
       router.refresh();
     } catch (err) {
+      if (err instanceof TransactionPendingError) {
+        // Resolution genuinely can take longer than we watched for — this is
+        // not a failure, the transaction may still land. Refresh so a
+        // successful result appears as soon as it's available, and let the
+        // "pending" status (rather than "failed") make that clear.
+        setState("pending");
+        setError("Still processing on-chain — this can take a couple of minutes for real web + LLM consensus. Refresh the page shortly to check.");
+        router.refresh();
+        return;
+      }
       setState("failed");
       setError(err instanceof Error ? err.message : "Resolution failed");
     }

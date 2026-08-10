@@ -14,7 +14,7 @@ import { ProbabilityBar } from "@/components/ProbabilityBar";
 import { TransactionStatus, type TxState } from "@/components/TransactionStatus";
 import { formatUtc } from "@/lib/format";
 import { useWallet } from "@/lib/wallet/useWallet";
-import { pravax } from "@/lib/genlayer/contracts/pravax";
+import { pravax, TransactionPendingError } from "@/lib/genlayer/contracts/pravax";
 import Link from "next/link";
 
 const TABS = ["MARKET", "RULES", "EVIDENCE", "RESOLUTION", "CHALLENGES", "ACTIVITY"] as const;
@@ -37,6 +37,12 @@ export function MarketTabs({ view }: { view: MarketView }) {
       setLockState("finalized");
       router.refresh();
     } catch (err) {
+      if (err instanceof TransactionPendingError) {
+        setLockState("pending");
+        setLockError("Still processing on-chain — refresh shortly to check.");
+        router.refresh();
+        return;
+      }
       setLockState("failed");
       setLockError(err instanceof Error ? err.message : "Locking failed");
     }

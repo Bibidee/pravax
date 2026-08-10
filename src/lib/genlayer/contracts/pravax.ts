@@ -25,6 +25,24 @@ async function read<T = string>(functionName: string, args: string[] = []): Prom
   }) as Promise<T>;
 }
 
+export class TransactionPendingError extends Error {
+  constructor(public hash: `0x${string}`) {
+    super(
+      `Transaction ${hash} is still being processed by GenLayer validators. It has not failed — check its status before retrying.`
+    );
+    this.name = "TransactionPendingError";
+  }
+}
+
+// Non-deterministic methods (resolve_market, review_challenge) involve a real
+// web fetch + LLM call + multi-round validator consensus, which routinely
+// takes well over a minute — much longer than deterministic writes. Waiting
+// with too short a timeout doesn't mean the transaction failed, it just means
+// we stopped watching too early; the write() helper below distinguishes
+// "genuinely failed/canceled" from "still pending, stopped polling" so the UI
+// never falsely reports success as failure.
+const NONDET_METHODS = new Set(["resolve_market", "review_challenge"]);
+
 async function write(
   account: `0x${string}`,
   provider: unknown,
@@ -38,7 +56,27 @@ async function write(
     args,
     value: BigInt(0),
   });
-  await client.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED });
+
+  const isNondet = NONDET_METHODS.has(functionName);
+  const retries = isNondet ? 40 : 15;
+  const interval = isNondet ? 6000 : 3000;
+
+  try {
+    await client.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED, retries, interval });
+  } catch {
+    // waitForTransactionReceipt only throws on a client-side timeout, not on
+    // an actual on-chain failure — check the real status directly rather
+    // than assuming the write failed.
+    const tx = await client.getTransaction({ hash });
+    const terminalFailureStatuses = new Set(["CANCELED", "UNDETERMINED"]);
+    if (tx.statusName && terminalFailureStatuses.has(tx.statusName)) {
+      throw new Error(`Transaction ${hash} did not reach consensus (${tx.statusName}). It may be safe to retry.`);
+    }
+    if (tx.statusName === "ACCEPTED" || tx.statusName === "FINALIZED") {
+      return hash; // actually succeeded, we just stopped polling too early
+    }
+    throw new TransactionPendingError(hash);
+  }
   return hash;
 }
 
