@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MarketView } from "@/lib/data/market";
 import { TransactionStatus, type TxState } from "@/components/TransactionStatus";
 import { EmptyState } from "@/components/EmptyState";
@@ -11,6 +12,7 @@ import { formatUtc, countdownLabel } from "@/lib/format";
 import { isPast } from "date-fns";
 
 export function ResolveClient({ view }: { view: MarketView }) {
+  const router = useRouter();
   const { address, connect } = useWallet();
   const [state, setState] = useState<TxState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,7 @@ export function ResolveClient({ view }: { view: MarketView }) {
         JSON.stringify({})
       );
       setState("finalized");
+      router.refresh();
     } catch (err) {
       setState("failed");
       setError(err instanceof Error ? err.message : "Resolution failed");

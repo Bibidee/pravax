@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MarketView } from "@/lib/data/market";
 import { ConstitutionPanel } from "@/components/ConstitutionPanel";
 import { EvidenceCard } from "@/components/EvidenceCard";
@@ -10,6 +11,7 @@ import { TimelineEvent } from "@/components/TimelineEvent";
 import { EmptyState } from "@/components/EmptyState";
 import { PositionSheet } from "@/components/PositionSheet";
 import { ProbabilityBar } from "@/components/ProbabilityBar";
+import { TransactionStatus, type TxState } from "@/components/TransactionStatus";
 import { formatUtc } from "@/lib/format";
 import { useWallet } from "@/lib/wallet/useWallet";
 import { pravax } from "@/lib/genlayer/contracts/pravax";
@@ -19,9 +21,26 @@ const TABS = ["MARKET", "RULES", "EVIDENCE", "RESOLUTION", "CHALLENGES", "ACTIVI
 type Tab = (typeof TABS)[number];
 
 export function MarketTabs({ view }: { view: MarketView }) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("MARKET");
   const { address } = useWallet();
   const { market, resolution, challenges, isDemo, id } = view;
+  const [lockState, setLockState] = useState<TxState>("idle");
+  const [lockError, setLockError] = useState<string | null>(null);
+
+  async function handleLock() {
+    if (!address) return;
+    setLockState("signing");
+    setLockError(null);
+    try {
+      await pravax.lockMarket(address, (window as unknown as { ethereum: unknown }).ethereum, id);
+      setLockState("finalized");
+      router.refresh();
+    } catch (err) {
+      setLockState("failed");
+      setLockError(err instanceof Error ? err.message : "Locking failed");
+    }
+  }
 
   return (
     <div>
@@ -58,15 +77,17 @@ export function MarketTabs({ view }: { view: MarketView }) {
               <p>Created {formatUtc(market.created_at)}</p>
             </div>
             {market.state === "OPEN" && address?.toLowerCase() === market.creator.toLowerCase() && !isDemo && (
-              <button
-                type="button"
-                onClick={async () => {
-                  await pravax.lockMarket(address, (window as unknown as { ethereum: unknown }).ethereum, id);
-                }}
-                className="rounded border border-border px-3 py-1.5 text-sm font-semibold"
-              >
-                Lock rules
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleLock}
+                  disabled={lockState === "signing"}
+                  className="rounded border border-border px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+                >
+                  {lockState === "signing" ? "Locking…" : "Lock rules"}
+                </button>
+                <TransactionStatus state={lockState === "finalized" ? "idle" : lockState} detail={lockError ?? undefined} />
+              </div>
             )}
           </div>
           <PositionSheet
@@ -82,6 +103,7 @@ export function MarketTabs({ view }: { view: MarketView }) {
                 id,
                 JSON.stringify({ outcome, amount })
               );
+              router.refresh();
             }}
           />
         </div>

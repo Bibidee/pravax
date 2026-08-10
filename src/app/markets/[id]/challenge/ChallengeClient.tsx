@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MarketView } from "@/lib/data/market";
 import { ChallengeFormSchema } from "@/lib/schemas/challenge";
 import { VerdictPanel } from "@/components/VerdictPanel";
@@ -10,6 +11,7 @@ import { useWallet } from "@/lib/wallet/useWallet";
 import { pravax } from "@/lib/genlayer/contracts/pravax";
 
 export function ChallengeClient({ view }: { view: MarketView }) {
+  const router = useRouter();
   const { address, connect } = useWallet();
   const [claimedVerdict, setClaimedVerdict] = useState<"YES" | "NO" | "INVALID" | "UNRESOLVED">("YES");
   const [disputedRule, setDisputedRule] = useState("");
@@ -67,6 +69,7 @@ export function ChallengeClient({ view }: { view: MarketView }) {
         JSON.stringify(parsed.data)
       );
       setState("finalized");
+      router.refresh();
     } catch (err) {
       setState("failed");
       setError(err instanceof Error ? err.message : "Challenge submission failed");
