@@ -43,6 +43,34 @@ export class TransactionPendingError extends Error {
 // never falsely reports success as failure.
 const NONDET_METHODS = new Set(["resolve_market", "review_challenge"]);
 
+type LeaderReceiptLike = {
+  execution_result?: string;
+  genvm_result?: { error_description?: string | null; raw_error?: string | null; stderr?: string | null };
+};
+
+type ReceiptLike = {
+  consensus_data?: { leader_receipt?: LeaderReceiptLike[] };
+};
+
+// A transaction reaching ACCEPTED/FINALIZED consensus status only means
+// validators agreed on *an* outcome — that outcome can still be a rejected
+// execution (e.g. the contract raised on invalid input) that leaves state
+// unchanged. Reading `status` alone caused create_market failures to be
+// reported as success and redirect to a market that was never actually
+// created. Every leader receipt's `execution_result` must be checked too.
+function assertExecutionSucceeded(hash: `0x${string}`, receipt: ReceiptLike): void {
+  const leaderReceipts = receipt.consensus_data?.leader_receipt ?? [];
+  const latest = leaderReceipts[leaderReceipts.length - 1];
+  if (!latest) return; // nothing to check against, don't block on missing data
+  if (latest.execution_result && latest.execution_result !== "SUCCESS") {
+    const detail =
+      latest.genvm_result?.error_description || latest.genvm_result?.raw_error || latest.genvm_result?.stderr;
+    throw new Error(
+      `Transaction ${hash} was accepted by consensus but execution failed${detail ? `: ${detail}` : ` (${latest.execution_result})`}.`
+    );
+  }
+}
+
 async function write(
   account: `0x${string}`,
   provider: unknown,
@@ -62,8 +90,15 @@ async function write(
   const interval = isNondet ? 6000 : 3000;
 
   try {
-    await client.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED, retries, interval });
-  } catch {
+    const receipt = await client.waitForTransactionReceipt({
+      hash,
+      status: TransactionStatus.ACCEPTED,
+      retries,
+      interval,
+    });
+    assertExecutionSucceeded(hash, receipt as ReceiptLike);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("execution failed")) throw err;
     // waitForTransactionReceipt only throws on a client-side timeout, not on
     // an actual on-chain failure — check the real status directly rather
     // than assuming the write failed.
@@ -73,6 +108,7 @@ async function write(
       throw new Error(`Transaction ${hash} did not reach consensus (${tx.statusName}). It may be safe to retry.`);
     }
     if (tx.statusName === "ACCEPTED" || tx.statusName === "FINALIZED") {
+      assertExecutionSucceeded(hash, tx as ReceiptLike);
       return hash; // actually succeeded, we just stopped polling too early
     }
     throw new TransactionPendingError(hash);

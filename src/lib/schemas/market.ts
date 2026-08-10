@@ -37,7 +37,10 @@ export const MarketCategorySchema = z.enum([
 ]);
 export type MarketCategory = z.infer<typeof MarketCategorySchema>;
 
-export const ResolutionConstitutionSchema = z.object({
+// Kept as a plain object schema (not refined) so MarketRecordSchema below can
+// still use .extend() — Zod's .refine()/.superRefine() return a ZodEffects
+// wrapper that no longer supports .extend().
+const ResolutionConstitutionObject = z.object({
   question: z.string().min(12, "Question must be specific enough to resolve unambiguously"),
   category: MarketCategorySchema.default("OTHER"),
   outcomes: z.array(z.string().min(1)).min(2).max(6),
@@ -51,9 +54,35 @@ export const ResolutionConstitutionSchema = z.object({
   ambiguity_policy: z.string().min(10, "State how ambiguous or conflicting evidence is handled"),
   clarification_notes: z.string().optional(),
 });
+
+// The contract enforces close_at <= event_deadline <= resolve_after and
+// rejects the whole transaction on-chain if violated. Checking the same
+// ordering here catches a mistake (e.g. a wrong month) in the composer
+// before submitting, instead of after a real consensus round confirms the
+// contract's rejection.
+export const ResolutionConstitutionSchema = ResolutionConstitutionObject.superRefine((data, ctx) => {
+  const closeAt = Date.parse(data.close_at);
+  const eventDeadline = Date.parse(data.event_deadline);
+  const resolveAfter = Date.parse(data.resolve_after);
+
+  if (!Number.isNaN(closeAt) && !Number.isNaN(eventDeadline) && closeAt > eventDeadline) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["event_deadline"],
+      message: "Event deadline must not be before close at",
+    });
+  }
+  if (!Number.isNaN(eventDeadline) && !Number.isNaN(resolveAfter) && eventDeadline > resolveAfter) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["resolve_after"],
+      message: "Resolves after must not be before event deadline",
+    });
+  }
+});
 export type ResolutionConstitution = z.infer<typeof ResolutionConstitutionSchema>;
 
-export const MarketRecordSchema = ResolutionConstitutionSchema.extend({
+export const MarketRecordSchema = ResolutionConstitutionObject.extend({
   creator: z.string(),
   constitution_hash: z.string(),
   created_at: z.string(),
