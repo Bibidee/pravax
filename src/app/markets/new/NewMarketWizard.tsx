@@ -29,6 +29,28 @@ async function sha256Hex(input: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// datetime-local inputs need "YYYY-MM-DDTHH:mm" in local time; without this,
+// the input can't be pre-filled from stored ISO state, so it always renders
+// blank on re-render (e.g. after navigating Back) even once a value is set.
+function toDatetimeLocalValue(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  question: "Question",
+  outcomes: "Outcomes",
+  close_at: "Close at",
+  event_deadline: "Event deadline",
+  resolve_after: "Resolves after",
+  primary_sources: "Primary sources",
+  definition: "Definition",
+  ambiguity_policy: "Ambiguity policy",
+};
+
 export function NewMarketWizard() {
   const router = useRouter();
   const { address, connect } = useWallet();
@@ -131,7 +153,8 @@ export function NewMarketWizard() {
               Close at
               <input
                 type="datetime-local"
-                onChange={(e) => update("close_at", new Date(e.target.value).toISOString())}
+                value={toDatetimeLocalValue(form.close_at)}
+                onChange={(e) => update("close_at", e.target.value ? new Date(e.target.value).toISOString() : "")}
                 className="mt-1 w-full rounded border border-border bg-canvas-raised px-3 py-2 text-sm"
               />
             </label>
@@ -139,7 +162,8 @@ export function NewMarketWizard() {
               Event deadline
               <input
                 type="datetime-local"
-                onChange={(e) => update("event_deadline", new Date(e.target.value).toISOString())}
+                value={toDatetimeLocalValue(form.event_deadline)}
+                onChange={(e) => update("event_deadline", e.target.value ? new Date(e.target.value).toISOString() : "")}
                 className="mt-1 w-full rounded border border-border bg-canvas-raised px-3 py-2 text-sm"
               />
             </label>
@@ -147,7 +171,8 @@ export function NewMarketWizard() {
               Resolves after
               <input
                 type="datetime-local"
-                onChange={(e) => update("resolve_after", new Date(e.target.value).toISOString())}
+                value={toDatetimeLocalValue(form.resolve_after)}
+                onChange={(e) => update("resolve_after", e.target.value ? new Date(e.target.value).toISOString() : "")}
                 className="mt-1 w-full rounded border border-border bg-canvas-raised px-3 py-2 text-sm"
               />
             </label>
@@ -237,13 +262,24 @@ export function NewMarketWizard() {
         <dl className="space-y-2 text-xs">
           <div><dt className="text-ink-faint">Question</dt><dd>{form.question || "—"}</dd></div>
           <div><dt className="text-ink-faint">Outcomes</dt><dd>{form.outcomes.filter(Boolean).join(", ") || "—"}</dd></div>
+          <div><dt className="text-ink-faint">Close at</dt><dd>{form.close_at || "—"}</dd></div>
           <div><dt className="text-ink-faint">Event deadline</dt><dd>{form.event_deadline || "—"}</dd></div>
+          <div><dt className="text-ink-faint">Resolves after</dt><dd>{form.resolve_after || "—"}</dd></div>
           <div><dt className="text-ink-faint">Primary sources</dt><dd>{form.primary_sources.filter(Boolean).join(", ") || "—"}</dd></div>
           <div><dt className="text-ink-faint">Ambiguity policy</dt><dd>{form.ambiguity_policy || "—"}</dd></div>
         </dl>
-        {!parsed.success && (
-          <p className="mt-3 text-xs text-danger">{parsed.error.issues[0]?.message}</p>
-        )}
+        {!parsed.success &&
+          (() => {
+            const issue = parsed.error.issues[0];
+            const field = issue?.path?.[0];
+            const label = typeof field === "string" ? FIELD_LABELS[field] ?? field : undefined;
+            return (
+              <p className="mt-3 text-xs text-danger">
+                {label ? `${label}: ` : ""}
+                {issue?.message}
+              </p>
+            );
+          })()}
         {isLastStep && (
           <div className="mt-4 space-y-3 border-t border-border pt-4">
             <label className="flex items-start gap-2 text-xs">
