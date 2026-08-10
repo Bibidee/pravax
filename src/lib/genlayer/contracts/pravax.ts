@@ -44,29 +44,55 @@ export class TransactionPendingError extends Error {
 const NONDET_METHODS = new Set(["resolve_market", "review_challenge"]);
 
 type LeaderReceiptLike = {
+  mode?: string;
   execution_result?: string;
-  genvm_result?: { error_description?: string | null; raw_error?: string | null; stderr?: string | null };
+  genvm_result?: { error_description?: string | null; raw_error?: unknown; stderr?: string | null };
 };
 
 type ReceiptLike = {
+  result_name?: string;
   consensus_data?: { leader_receipt?: LeaderReceiptLike[] };
 };
+
+function stringifyDetail(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === "string") return value;
+  try {
+    const json = JSON.stringify(value);
+    // {"fatal":false,"causes":[]} carries no useful information — skip it
+    // rather than showing noise in the error message.
+    return json && json !== "{}" && json !== '{"fatal":false,"causes":[]}' ? json : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // A transaction reaching ACCEPTED/FINALIZED consensus status only means
 // validators agreed on *an* outcome — that outcome can still be a rejected
 // execution (e.g. the contract raised on invalid input) that leaves state
-// unchanged. Reading `status` alone caused create_market failures to be
-// reported as success and redirect to a market that was never actually
-// created. Every leader receipt's `execution_result` must be checked too.
+// unchanged. `result_name` (e.g. "MAJORITY_AGREE") only confirms validators
+// agreed with each other — they can just as easily agree that execution
+// *failed* (e.g. a genuine contract validation error), so it must NOT be
+// used as a success shortcut; the leader's own `execution_result` is the
+// only field that actually says whether the write succeeded.
+//
+// `leader_receipt` can contain multiple entries across rounds — one per
+// validator/leader attempt, including transient per-validator failures
+// (e.g. an LLM provider timeout) that are unrelated to whether the
+// transaction as a whole actually succeeded. The entry with mode "leader"
+// is the one that reflects the committed outcome.
 function assertExecutionSucceeded(hash: `0x${string}`, receipt: ReceiptLike): void {
   const leaderReceipts = receipt.consensus_data?.leader_receipt ?? [];
-  const latest = leaderReceipts[leaderReceipts.length - 1];
-  if (!latest) return; // nothing to check against, don't block on missing data
-  if (latest.execution_result && latest.execution_result !== "SUCCESS") {
+  const leaderEntry = leaderReceipts.find((r) => r.mode === "leader") ?? leaderReceipts[0];
+  if (!leaderEntry) return; // nothing to check against, don't block on missing data
+
+  if (leaderEntry.execution_result && leaderEntry.execution_result !== "SUCCESS") {
     const detail =
-      latest.genvm_result?.error_description || latest.genvm_result?.raw_error || latest.genvm_result?.stderr;
+      stringifyDetail(leaderEntry.genvm_result?.error_description) ??
+      stringifyDetail(leaderEntry.genvm_result?.raw_error) ??
+      stringifyDetail(leaderEntry.genvm_result?.stderr);
     throw new Error(
-      `Transaction ${hash} was accepted by consensus but execution failed${detail ? `: ${detail}` : ` (${latest.execution_result})`}.`
+      `Transaction ${hash} was accepted by consensus but execution failed${detail ? `: ${detail}` : ` (${leaderEntry.execution_result})`}.`
     );
   }
 }
