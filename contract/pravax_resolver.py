@@ -14,6 +14,10 @@ MAX_TEXT = 2000
 MAX_REASONING = 4000
 MAX_EVIDENCE = 6
 MAX_CONFLICTS = 12
+MAX_ID_LENGTH = 128
+MAX_URL_LENGTH = 512
+MAX_PROMPT_CHARS = 16000
+MAX_SOURCE_EXCERPT = 700
 CHALLENGE_WINDOW_SECONDS = 24 * 60 * 60
 MAX_SOURCES_FETCHED = 6
 
@@ -80,6 +84,7 @@ def _parse_json_object(raw: str, what: str) -> dict:
 
 def _parse_iso_timestamp(value: str, field: str):
     _require(isinstance(value, str) and len(value) > 0, f"{field} is required")
+    _require(value.endswith("Z") and len(value) == 20 and value[4] == "-" and value[7] == "-" and value[10] == "T" and value[13] == ":" and value[16] == ":", f"{field} must be canonical UTC ISO-8601")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (TypeError, ValueError):
@@ -90,12 +95,29 @@ def _parse_iso_timestamp(value: str, field: str):
 
 
 def _require_http_url(value, field: str) -> None:
-    _require(isinstance(value, str) and len(value) > 0, f"{field} must be a non-empty URL")
+    _require(isinstance(value, str) and 0 < len(value) <= MAX_URL_LENGTH, f"{field} must be a bounded URL")
     scheme, separator, host_and_path = value.partition("://")
     host = host_and_path.split("/", 1)[0]
     _require(separator == "://" and scheme in ("http", "https") and len(host) > 0, f"{field} must be an http(s) URL")
     hostname = host.split("@")[-1].split(":")[0].lower()
     _require("@" not in host and hostname not in ("localhost", "127.0.0.1", "::1") and not hostname.startswith("10.") and not hostname.startswith("192.168.") and not hostname.startswith("169.254."), f"{field} must be a public URL")
+
+
+def _source_packet(records):
+    """Bound each source independently so later sources are always represented."""
+    packet = []
+    for record in records:
+        item = {"url": record["url"], "source_role": record["source_role"]}
+        if "kind" in record:
+            item["kind"] = record["kind"]
+        if "excerpt" in record:
+            item["excerpt"] = record["excerpt"][:MAX_SOURCE_EXCERPT]
+        if "error" in record:
+            item["error"] = record["error"][:MAX_SOURCE_EXCERPT]
+        packet.append(item)
+    encoded = json.dumps(packet, separators=(",", ":"))
+    _require(len(encoded) <= MAX_PROMPT_CHARS, "evidence packet exceeds deterministic prompt budget")
+    return encoded
 
 
 def _validate_verdict_shape(parsed: dict, retrieved: dict) -> None:
@@ -112,7 +134,11 @@ def _validate_verdict_shape(parsed: dict, retrieved: dict) -> None:
         _require(item["url"] in retrieved and item["source_role"] == retrieved[item["url"]], "evidence provenance is invalid", ERR_LLM)
         _require(isinstance(item["claim"], str) and 0 < len(item["claim"]) <= MAX_TEXT, "evidence claim is invalid", ERR_LLM)
         for field in ("published_at", "event_time"):
-            _require(item[field] is None or (isinstance(item[field], str) and len(item[field]) <= 64), f"{field} is invalid", ERR_LLM)
+            if item[field] is not None:
+                try:
+                    _parse_iso_timestamp(item[field], field)
+                except Exception:
+                    _fail(ERR_LLM, f"{field} is invalid")
     _require(isinstance(parsed["conflicts"], list) and len(parsed["conflicts"]) <= MAX_CONFLICTS and all(isinstance(x, str) and len(x) <= MAX_TEXT for x in parsed["conflicts"]), "conflicts are invalid", ERR_LLM)
 
 
@@ -199,7 +225,7 @@ class PravaxResolver(gl.Contract):
 
     @gl.public.write
     def create_market(self, market_id: str, market_json: str) -> None:
-        _require(len(market_id) > 0, "market_id is required")
+        _require(0 < len(market_id) <= MAX_ID_LENGTH, "market_id is required and bounded")
         _require(market_id not in self.markets, "market_id already exists")
         market = _parse_json_object(market_json, "market_json")
         self._validate_constitution(market)
@@ -232,6 +258,7 @@ class PravaxResolver(gl.Contract):
 
     @gl.public.write
     def record_position(self, position_id: str, market_id: str, position_json: str) -> None:
+        _require(0 < len(position_id) <= MAX_ID_LENGTH, "position_id is required and bounded")
         _require(market_id in self.markets, "unknown market_id")
         state = self.market_state.get(market_id, "")
         _require(state == "OPEN", f"positions may only be recorded while OPEN (current: {state})")
@@ -259,6 +286,7 @@ class PravaxResolver(gl.Contract):
 
     @gl.public.write
     def submit_challenge(self, market_id: str, challenge_id: str, challenge_json: str) -> None:
+        _require(0 < len(challenge_id) <= MAX_ID_LENGTH, "challenge_id is required and bounded")
         _require(market_id in self.markets, "unknown market_id")
         state = self.market_state.get(market_id, "")
         _require(state == "CHALLENGE_WINDOW", f"challenges are only accepted during CHALLENGE_WINDOW (current: {state})")
@@ -280,6 +308,9 @@ class PravaxResolver(gl.Contract):
         _require(challenge["challenged_verdict"] == current_verdict, "challenged_verdict must match the provisional verdict")
         _require(challenge["claimed_verdict"] != current_verdict, "claimed_verdict must differ from the provisional verdict")
         _require(all(isinstance(challenge[field], str) and len(challenge[field].strip()) > 0 for field in ("disputed_rule", "explanation")), "challenge text fields must be non-empty")
+        _require(len(challenge["disputed_rule"]) <= MAX_TEXT and len(challenge["explanation"]) <= MAX_TEXT, "challenge text fields are too long")
+        _require(len(challenge["evidence_urls"]) <= MAX_SOURCES_FETCHED, "too many challenge evidence URLs")
+        _require(len(set(challenge["evidence_urls"])) == len(challenge["evidence_urls"]), "challenge evidence URLs must be unique")
         for index, source in enumerate(challenge["evidence_urls"]):
             _require_http_url(source, f"counter-evidence URL {index + 1}")
 
@@ -335,18 +366,18 @@ class PravaxResolver(gl.Contract):
             for url, role in sources:
                 try:
                     rendered_text = gl.nondet.web.render(url, mode="text")
-                    evidence_snippets.append({"url": url, "source_role": role, "excerpt": rendered_text[:2500]})
+                    evidence_snippets.append({"url": url, "source_role": role, "kind": "ORIGINAL_CONSTITUTION", "excerpt": rendered_text})
                 except Exception as exc:
                     # An unreachable or empty source is itself evidence the
                     # model should weigh (e.g. against invalidation rules).
-                    evidence_snippets.append({"url": url, "source_role": role, "error": f"{ERR_EXTERNAL}: {exc}"})
+                    evidence_snippets.append({"url": url, "source_role": role, "kind": "ORIGINAL_CONSTITUTION", "error": f"{ERR_EXTERNAL}: {exc}"})
 
             task = (
                 RESOLUTION_PROMPT_HEADER
                 + "\n\n<UNTRUSTED_CONSTITUTION>\n"
                 + json.dumps(market, sort_keys=True)
                 + "\n</UNTRUSTED_CONSTITUTION>\n\n<UNTRUSTED_SOURCE_MATERIAL>\n"
-                + json.dumps(evidence_snippets)[:16000]
+                + _source_packet(evidence_snippets)
                 + "\n</UNTRUSTED_SOURCE_MATERIAL>\n"
                 + "\n\nRETURN A JSON OBJECT WITH EXACTLY THESE FIELDS:\n"
                 + json.dumps(
@@ -405,16 +436,16 @@ class PravaxResolver(gl.Contract):
             for url, role in original_sources:
                 try:
                     rendered_text = gl.nondet.web.render(url, mode="text")
-                    counter_evidence.append({"url": url, "source_role": role, "excerpt": rendered_text[:2500]})
+                    counter_evidence.append({"url": url, "source_role": role, "kind": "ORIGINAL_CONSTITUTION", "excerpt": rendered_text})
                 except Exception as exc:
-                    counter_evidence.append({"url": url, "source_role": role, "error": f"{ERR_EXTERNAL}: {exc}"})
+                    counter_evidence.append({"url": url, "source_role": role, "kind": "ORIGINAL_CONSTITUTION", "error": f"{ERR_EXTERNAL}: {exc}"})
             for url in latest_challenge["evidence_urls"][:MAX_SOURCES_FETCHED]:
                 retrieved[url] = "SECONDARY"
                 try:
                     rendered_text = gl.nondet.web.render(url, mode="text")
-                    counter_evidence.append({"url": url, "source_role": "SECONDARY", "excerpt": rendered_text[:2500]})
+                    counter_evidence.append({"url": url, "source_role": "SECONDARY", "kind": "CHALLENGER_COUNTER_EVIDENCE", "excerpt": rendered_text})
                 except Exception as exc:
-                    counter_evidence.append({"url": url, "source_role": "SECONDARY", "error": f"{ERR_EXTERNAL}: {exc}"})
+                    counter_evidence.append({"url": url, "source_role": "SECONDARY", "kind": "CHALLENGER_COUNTER_EVIDENCE", "error": f"{ERR_EXTERNAL}: {exc}"})
             task = (
                 RESOLUTION_PROMPT_HEADER
                 + "\n\nThis is an INDEPENDENT SECOND REVIEW of a challenged provisional verdict."
@@ -422,7 +453,7 @@ class PravaxResolver(gl.Contract):
                 + "<UNTRUSTED_CONSTITUTION>\n" + json.dumps(market, sort_keys=True) + "\n</UNTRUSTED_CONSTITUTION>"
                 + "\n\n<UNTRUSTED_PROVISIONAL_CONTEXT>\n" + json.dumps(original_verdict, sort_keys=True) + "\n</UNTRUSTED_PROVISIONAL_CONTEXT>"
                 + "\n\nDISPUTED RULE:\n" + str(latest_challenge.get("disputed_rule"))
-                + "\n\n<UNTRUSTED_RETRIEVED_EVIDENCE>\n" + json.dumps(counter_evidence)[:16000] + "\n</UNTRUSTED_RETRIEVED_EVIDENCE>"
+                + "\n\n<UNTRUSTED_RETRIEVED_EVIDENCE>\n" + _source_packet(counter_evidence) + "\n</UNTRUSTED_RETRIEVED_EVIDENCE>"
                 + "\n\nCHALLENGER EXPLANATION:\n" + str(latest_challenge.get("explanation"))
                 + "\n\nRETURN A JSON OBJECT WITH THE SAME FIELDS AS THE ORIGINAL VERDICT."
             )

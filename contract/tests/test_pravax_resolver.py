@@ -131,6 +131,27 @@ def test_create_market_rejects_invalid_timestamps_and_source_urls():
             assert "ISO-8601" in str(e) or "http(s)" in str(e)
 
 
+def test_create_market_accepts_only_canonical_utc_z_timestamps():
+    c = new_contract()
+    c.create_market("utc", json.dumps(valid_market()))
+    for suffix in ("+01:00", "-05:00"):
+        bad = valid_market(close_at="2026-11-25T01:00:00" + suffix)
+        try:
+            c.create_market("bad" + suffix[0], json.dumps(bad))
+            assert False, suffix
+        except Exception as e:
+            assert "canonical UTC" in str(e)
+
+
+def test_market_id_is_bounded():
+    c = new_contract()
+    try:
+        c.create_market("x" * (pravax_resolver.MAX_ID_LENGTH + 1), json.dumps(valid_market()))
+        assert False
+    except Exception as e:
+        assert "market_id" in str(e)
+
+
 def test_create_market_rejects_harmful_framing():
     c = new_contract()
     try:

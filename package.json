@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "contract-test": "python -m pytest contract/tests -q",
+    "direct-test": "py -3.12 -m pytest tests/direct -q",
     "verify": "npm run lint && npm run typecheck && npm run contract-test && npm run build"
   },
   "dependencies": {
