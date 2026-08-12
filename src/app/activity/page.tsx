@@ -5,11 +5,11 @@ import { EmptyState } from "@/components/EmptyState";
 import { formatUtc } from "@/lib/format";
 import Link from "next/link";
 import { useWallet } from "@/lib/wallet/useWallet";
-import { useMyMarkets } from "@/lib/hooks/useMyMarkets";
+import { useAllMarkets } from "@/lib/hooks/useMyMarkets";
 
 export default function ActivityPage() {
   const { address } = useWallet();
-  const { markets: myMarkets, loading } = useMyMarkets(address);
+  const { markets: myMarkets, loading } = useAllMarkets();
 
   const markets = myMarkets;
 
@@ -26,7 +26,7 @@ export default function ActivityPage() {
       <h1 className="font-display mb-6 text-2xl">Activity</h1>
       {!address && (
         <p className="mb-6 rounded border border-border bg-canvas-raised px-3 py-2 text-xs text-ink-muted">
-          Connect a wallet to see activity for markets associated with your address.
+          Connect a wallet to create positions or manage markets. Protocol activity is publicly discoverable.
         </p>
       )}
       {loading && <p className="mb-4 text-xs text-ink-faint">Loading your activity…</p>}

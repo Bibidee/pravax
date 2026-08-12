@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { MarketCard } from "@/components/MarketCard";
 import { useWallet } from "@/lib/wallet/useWallet";
-import { useMyMarkets } from "@/lib/hooks/useMyMarkets";
+import { useAllMarkets } from "@/lib/hooks/useMyMarkets";
 
 export default function Home() {
-  const { address } = useWallet();
-  const { markets: myMarkets } = useMyMarkets(address);
+  useWallet();
+  const { markets: myMarkets } = useAllMarkets();
 
   const markets = myMarkets;
   const open = markets.filter((m) => m.market.state === "OPEN");

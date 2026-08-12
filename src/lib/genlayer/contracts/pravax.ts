@@ -172,6 +172,7 @@ export const pravax = {
   getChallenges: (marketId: string) => read<string>("get_challenges", [marketId]),
   getPositions: (marketId: string) => read<string>("get_positions", [marketId]),
   getUserMarkets: (user: string) => read<string>("get_user_markets", [user]),
+  getMarketIds: (offset = 0, limit = 50) => read<string>("get_market_ids", [String(offset), String(limit)]),
   getProtocolStats: () => read<string>("get_protocol_stats", []),
 
   isConfigured: () => Boolean(PRAVAX_CONTRACT_ADDRESS),

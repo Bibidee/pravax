@@ -125,6 +125,7 @@ class PravaxResolver(gl.Contract):
     challenges: TreeMap[str, str]  # market_id -> JSON array of challenge records
     positions: TreeMap[str, str]  # market_id -> JSON array of position records
     user_markets: TreeMap[str, str]  # lowercase address -> JSON array of market ids
+    market_ids: TreeMap[str, str]  # numeric index -> market id
     market_state: TreeMap[str, str]  # market_id -> state machine value
     resolved_flag: TreeMap[str, str]  # market_id -> "1" once finalized
     stats: TreeMap[str, str]  # single key "protocol" -> JSON stats blob
@@ -209,6 +210,7 @@ class PravaxResolver(gl.Contract):
 
         self.markets[market_id] = json.dumps(market, sort_keys=True)
         self.market_state[market_id] = "OPEN"
+        self.market_ids[str(len(self.market_ids))] = market_id
         self._track_user_market(creator, market_id)
         self._bump_stat("markets_created")
 
@@ -472,6 +474,19 @@ class PravaxResolver(gl.Contract):
     @gl.public.view
     def get_user_markets(self, user: str) -> str:
         return self.user_markets.get(user.lower(), "[]")
+
+    @gl.public.view
+    def get_market_ids(self, offset: int = 0, limit: int = 50) -> str:
+        _require(offset >= 0 and limit > 0 and limit <= 100, "invalid pagination")
+        ids = []
+        index = offset
+        while index < offset + limit:
+            key = str(index)
+            if key not in self.market_ids:
+                break
+            ids.append(self.market_ids[key])
+            index += 1
+        return json.dumps(ids)
 
     @gl.public.view
     def get_protocol_stats(self) -> str:
