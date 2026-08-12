@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { TransactionStatus, type TxState } from "@/components/TransactionStatus";
 import { useWallet } from "@/lib/wallet/useWallet";
 import { pravax, TransactionPendingError } from "@/lib/genlayer/contracts/pravax";
+import { isPast } from "date-fns";
 
 export function ChallengeClient({ view }: { view: MarketView }) {
   const router = useRouter();
@@ -24,21 +25,69 @@ export function ChallengeClient({ view }: { view: MarketView }) {
     return <EmptyState title="No verdict to challenge yet" description="A market can only be challenged after it has a provisional resolution." />;
   }
 
-  if (view.market.state !== "CHALLENGE_WINDOW") {
-    return (
-      <EmptyState
-        title="Challenge window is not open"
-        description="Challenges may only be filed while the market is in its provisional challenge window."
-      />
-    );
-  }
-
   if (view.isDemo) {
     return (
       <EmptyState
         title="Demo template — challenges disabled"
         description="This is an illustrative template. Deploy PravaxResolver and resolve a real market to open a live challenge window."
       />
+    );
+  }
+
+  async function runLifecycleAction(action: "review" | "finalize") {
+    setError(null);
+    if (!address) {
+      await connect();
+      return;
+    }
+    setState("signing");
+    try {
+      if (action === "review") {
+        await pravax.reviewChallenge(address, (window as unknown as { ethereum: unknown }).ethereum, view.id);
+      } else {
+        await pravax.finalizeResolution(address, (window as unknown as { ethereum: unknown }).ethereum, view.id);
+      }
+      setState("finalized");
+      router.refresh();
+    } catch (err) {
+      if (err instanceof TransactionPendingError) {
+        setState("pending");
+        setError("Still processing on-chain — refresh the page shortly to check.");
+        router.refresh();
+        return;
+      }
+      setState("failed");
+      setError(err instanceof Error ? err.message : "Lifecycle action failed");
+    }
+  }
+
+  if (view.market.state === "CHALLENGED") {
+    return (
+      <div className="max-w-xl space-y-4 rounded-lg border border-border bg-canvas-raised p-6">
+        <VerdictPanel resolution={view.resolution} provisional />
+        <p className="text-sm text-ink-muted">A challenge is on record. Anyone may trigger an independent evidence review.</p>
+        <button type="button" onClick={() => runLifecycleAction("review")} className="rounded bg-ink px-4 py-2 text-sm font-semibold text-canvas">
+          {address ? "Review challenge" : "Connect wallet to review"}
+        </button>
+        <TransactionStatus state={state} detail={error ?? undefined} />
+      </div>
+    );
+  }
+
+  if (view.market.state !== "CHALLENGE_WINDOW") {
+    return <EmptyState title="Challenge window is not open" description="Challenges may only be filed while the market is in its provisional challenge window." />;
+  }
+
+  if (view.market.challenge_deadline && isPast(new Date(view.market.challenge_deadline))) {
+    return (
+      <div className="max-w-xl space-y-4 rounded-lg border border-border bg-canvas-raised p-6">
+        <VerdictPanel resolution={view.resolution} provisional />
+        <p className="text-sm text-ink-muted">The challenge window has closed. Anyone may finalize this resolution.</p>
+        <button type="button" onClick={() => runLifecycleAction("finalize")} className="rounded bg-ink px-4 py-2 text-sm font-semibold text-canvas">
+          {address ? "Finalize resolution" : "Connect wallet to finalize"}
+        </button>
+        <TransactionStatus state={state} detail={error ?? undefined} />
+      </div>
     );
   }
 

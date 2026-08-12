@@ -144,8 +144,8 @@ async function write(
 
 export const pravax = {
   // ---- deterministic writes ----
-  createMarket: (account: `0x${string}`, provider: unknown, marketId: string, marketJson: string, constitutionHash: string) =>
-    write(account, provider, "create_market", [marketId, marketJson, constitutionHash]),
+  createMarket: (account: `0x${string}`, provider: unknown, marketId: string, marketJson: string) =>
+    write(account, provider, "create_market", [marketId, marketJson]),
 
   lockMarket: (account: `0x${string}`, provider: unknown, marketId: string) =>
     write(account, provider, "lock_market", [marketId]),
@@ -160,11 +160,11 @@ export const pravax = {
     write(account, provider, "finalize_resolution", [marketId]),
 
   // ---- non-deterministic resolution ----
-  resolveMarket: (account: `0x${string}`, provider: unknown, marketId: string, resolutionPayloadJson: string) =>
-    write(account, provider, "resolve_market", [marketId, resolutionPayloadJson]),
+  resolveMarket: (account: `0x${string}`, provider: unknown, marketId: string) =>
+    write(account, provider, "resolve_market", [marketId]),
 
-  reviewChallenge: (account: `0x${string}`, provider: unknown, marketId: string, reviewPayloadJson: string) =>
-    write(account, provider, "review_challenge", [marketId, reviewPayloadJson]),
+  reviewChallenge: (account: `0x${string}`, provider: unknown, marketId: string) =>
+    write(account, provider, "review_challenge", [marketId]),
 
   // ---- views ----
   getMarket: (marketId: string) => read<string>("get_market", [marketId]),

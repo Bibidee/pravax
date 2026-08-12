@@ -84,7 +84,6 @@ export type ResolutionConstitution = z.infer<typeof ResolutionConstitutionSchema
 
 export const MarketRecordSchema = ResolutionConstitutionObject.extend({
   creator: z.string(),
-  constitution_hash: z.string(),
   created_at: z.string(),
   locked_at: z.string().optional(),
   challenge_deadline: z.string().optional(),

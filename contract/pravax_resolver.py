@@ -1,15 +1,4 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
-#
-# PravaxResolver — GenLayer Intelligent Contract
-#
-# Evidence-native prediction market resolution protocol.
-# Deterministic methods own state transitions and validation.
-# `resolve_market` is the single non-deterministic entry point: it renders
-# live public evidence and asks GenLayer validators to interpret the
-# market's LOCKED resolution constitution against that evidence, reaching
-# consensus via the Equivalence Principle. The contract never decides
-# real-world truth itself — it only enforces the state machine around
-# whatever the validators agree happened.
 
 from genlayer import *
 
@@ -89,6 +78,24 @@ def _parse_json_object(raw: str, what: str) -> dict:
     return data
 
 
+def _parse_iso_timestamp(value: str, field: str):
+    _require(isinstance(value, str) and len(value) > 0, f"{field} is required")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        _fail(ERR_EXPECTED, f"{field} must be an ISO-8601 timestamp")
+        return datetime.now(timezone.utc)
+    _require(parsed.tzinfo is not None, f"{field} must include a timezone")
+    return parsed.astimezone(timezone.utc)
+
+
+def _require_http_url(value, field: str) -> None:
+    _require(isinstance(value, str) and len(value) > 0, f"{field} must be a non-empty URL")
+    scheme, separator, host_and_path = value.partition("://")
+    host = host_and_path.split("/", 1)[0]
+    _require(separator == "://" and scheme in ("http", "https") and len(host) > 0, f"{field} must be an http(s) URL")
+
+
 def _validate_verdict_shape(parsed: dict) -> None:
     _require(isinstance(parsed, dict), "model response was not a JSON object", ERR_LLM)
     _require(parsed.get("verdict") in VERDICTS, "verdict missing or out of range", ERR_LLM)
@@ -146,15 +153,24 @@ class PravaxResolver(gl.Contract):
             isinstance(outcomes, list) and VALID_OUTCOMES_MIN <= len(outcomes) <= VALID_OUTCOMES_MAX,
             f"outcomes must contain between {VALID_OUTCOMES_MIN} and {VALID_OUTCOMES_MAX} entries",
         )
-        for field in ("close_at", "resolve_after", "event_deadline"):
-            _require(isinstance(market.get(field), str) and len(market[field]) > 0, f"{field} is required")
-        _require(market["resolve_after"] >= market["event_deadline"], "resolve_after must not precede event_deadline")
-        _require(market["event_deadline"] >= market["close_at"], "event_deadline must not precede close_at")
+        for outcome in outcomes:
+            _require(isinstance(outcome, str) and len(outcome.strip()) > 0, "outcomes must be non-empty strings")
+        for index, outcome in enumerate(outcomes):
+            _require(outcomes.index(outcome) == index, "outcomes must be unique")
+        close_at = _parse_iso_timestamp(market.get("close_at"), "close_at")
+        resolve_after = _parse_iso_timestamp(market.get("resolve_after"), "resolve_after")
+        event_deadline = _parse_iso_timestamp(market.get("event_deadline"), "event_deadline")
+        _require(resolve_after >= event_deadline, "resolve_after must not precede event_deadline")
+        _require(event_deadline >= close_at, "event_deadline must not precede close_at")
         primary_sources = market.get("primary_sources")
         _require(
             isinstance(primary_sources, list) and len(primary_sources) > 0,
             "at least one primary source is required",
         )
+        secondary_sources = market.get("secondary_sources", [])
+        _require(isinstance(secondary_sources, list), "secondary_sources must be a list")
+        for index, source in enumerate(primary_sources + secondary_sources):
+            _require_http_url(source, f"source {index + 1}")
         _require(isinstance(market.get("definition"), str) and len(market["definition"]) > 0, "definition is required")
         _require(
             isinstance(market.get("ambiguity_policy"), str) and len(market["ambiguity_policy"]) > 0,
@@ -173,17 +189,14 @@ class PravaxResolver(gl.Contract):
     # ------------------------------------------------------------------
 
     @gl.public.write
-    def create_market(self, market_id: str, market_json: str, constitution_hash: str) -> None:
+    def create_market(self, market_id: str, market_json: str) -> None:
         _require(len(market_id) > 0, "market_id is required")
         _require(market_id not in self.markets, "market_id already exists")
-        _require(len(constitution_hash) > 0, "constitution_hash is required")
-
         market = _parse_json_object(market_json, "market_json")
         self._validate_constitution(market)
 
         creator = str(gl.message.sender_address)
         market["creator"] = creator
-        market["constitution_hash"] = constitution_hash
         market["created_at"] = _now_iso()
 
         self.markets[market_id] = json.dumps(market, sort_keys=True)
@@ -213,8 +226,13 @@ class PravaxResolver(gl.Contract):
         _require(state == "OPEN", f"positions may only be recorded while OPEN (current: {state})")
 
         position = _parse_json_object(position_json, "position_json")
-        _require(isinstance(position.get("outcome"), str), "outcome is required")
-        _require(isinstance(position.get("amount"), (int, float)) and position["amount"] > 0, "amount must be positive")
+        market = json.loads(self.markets[market_id])
+        _require(position.get("outcome") in market["outcomes"], "outcome must be one of the market outcomes")
+        amount = position.get("amount")
+        _require(
+            isinstance(amount, (int, float)) and not isinstance(amount, bool) and amount > 0,
+            "amount must be a positive number",
+        )
 
         holder = str(gl.message.sender_address)
         position["position_id"] = position_id
@@ -241,6 +259,13 @@ class PravaxResolver(gl.Contract):
             "at least one counter-evidence URL is required",
         )
         _require(market_id in self.resolutions, "market has no provisional resolution to challenge")
+        market = json.loads(self.markets[market_id])
+        _require(_now_iso() < market.get("challenge_deadline", ""), "challenge window has closed")
+        _require(challenge["challenged_verdict"] in VERDICTS, "challenged_verdict is invalid")
+        _require(challenge["claimed_verdict"] in VERDICTS, "claimed_verdict is invalid")
+        _require(all(isinstance(challenge[field], str) and len(challenge[field].strip()) > 0 for field in ("disputed_rule", "explanation")), "challenge text fields must be non-empty")
+        for index, source in enumerate(challenge["evidence_urls"]):
+            _require_http_url(source, f"counter-evidence URL {index + 1}")
 
         challenge["challenge_id"] = challenge_id
         challenge["challenger"] = str(gl.message.sender_address)
@@ -258,15 +283,14 @@ class PravaxResolver(gl.Contract):
         _require(market_id in self.markets, "unknown market_id")
         state = self.market_state.get(market_id, "")
         _require(
-            state in ("CHALLENGE_WINDOW", "CHALLENGED"),
+            state == "CHALLENGE_WINDOW",
             f"market must have a provisional verdict awaiting finalization (current: {state})",
         )
         _require(market_id not in self.resolved_flag, "resolution already finalized")
 
         market = json.loads(self.markets[market_id])
         challenge_deadline = market.get("challenge_deadline")
-        if state == "CHALLENGE_WINDOW" and challenge_deadline:
-            _require(_now_iso() >= challenge_deadline, "challenge window has not yet closed")
+        _require(challenge_deadline and _now_iso() >= challenge_deadline, "challenge window has not yet closed")
 
         self.market_state[market_id] = "FINAL"
         self.resolved_flag[market_id] = "1"
@@ -277,7 +301,7 @@ class PravaxResolver(gl.Contract):
     # ------------------------------------------------------------------
 
     @gl.public.write
-    def resolve_market(self, market_id: str, resolution_payload_json: str) -> None:
+    def resolve_market(self, market_id: str) -> None:
         _require(market_id in self.markets, "unknown market_id")
         state = self.market_state.get(market_id, "")
         _require(state == "LOCKED", f"market must be LOCKED before resolution (current: {state})")
@@ -286,11 +310,8 @@ class PravaxResolver(gl.Contract):
         resolve_after = market.get("resolve_after", "")
         _require(_now_iso() >= resolve_after, "resolution time has not been reached")
 
-        payload = _parse_json_object(resolution_payload_json, "resolution_payload_json")
-        constitution = payload.get("constitution", market)
-
         def nondet_resolution() -> dict:
-            sources = list(constitution.get("primary_sources", [])) + list(constitution.get("secondary_sources", []))
+            sources = list(market.get("primary_sources", [])) + list(market.get("secondary_sources", []))
             evidence_snippets = []
             for url in sources[:MAX_SOURCES_FETCHED]:
                 try:
@@ -304,7 +325,7 @@ class PravaxResolver(gl.Contract):
             task = (
                 RESOLUTION_PROMPT_HEADER
                 + "\n\nRESOLUTION CONSTITUTION:\n"
-                + json.dumps(constitution, sort_keys=True)
+                + json.dumps(market, sort_keys=True)
                 + "\n\nRETRIEVED SOURCE MATERIAL:\n"
                 + json.dumps(evidence_snippets)[:16000]
                 + "\n\nRETURN A JSON OBJECT WITH EXACTLY THESE FIELDS:\n"
@@ -335,16 +356,14 @@ class PravaxResolver(gl.Contract):
 
         verdict = gl.eq_principle.prompt_comparative(nondet_resolution, principle=VERDICT_EQUIVALENCE_PRINCIPLE)
 
-        market["challenge_deadline"] = payload.get(
-            "challenge_deadline_override", _add_seconds_iso(_now_iso(), CHALLENGE_WINDOW_SECONDS)
-        )
+        market["challenge_deadline"] = _add_seconds_iso(_now_iso(), CHALLENGE_WINDOW_SECONDS)
         self.markets[market_id] = json.dumps(market, sort_keys=True)
         self.resolutions[market_id] = json.dumps(verdict, sort_keys=True)
         self.market_state[market_id] = "CHALLENGE_WINDOW"
         self._bump_stat("markets_resolved")
 
     @gl.public.write
-    def review_challenge(self, market_id: str, review_payload_json: str) -> None:
+    def review_challenge(self, market_id: str) -> None:
         # Independent second GenLayer review triggered after a challenge is
         # filed: it sees the original constitution, provisional verdict,
         # original evidence, and challenger evidence together, and may
@@ -359,9 +378,14 @@ class PravaxResolver(gl.Contract):
         _require(len(challenges) > 0, "no challenge on record")
         latest_challenge = challenges[-1]
 
-        payload = _parse_json_object(review_payload_json, "review_payload_json")
-
         def nondet_review() -> dict:
+            counter_evidence = []
+            for url in latest_challenge["evidence_urls"][:MAX_SOURCES_FETCHED]:
+                try:
+                    rendered_text = gl.nondet.web.render(url, mode="text")
+                    counter_evidence.append({"url": url, "excerpt": rendered_text[:6000]})
+                except Exception as exc:
+                    counter_evidence.append({"url": url, "error": f"{ERR_EXTERNAL}: {exc}"})
             task = (
                 RESOLUTION_PROMPT_HEADER
                 + "\n\nThis is an INDEPENDENT SECOND REVIEW of a challenged provisional verdict."
@@ -369,9 +393,8 @@ class PravaxResolver(gl.Contract):
                 + "ORIGINAL CONSTITUTION:\n" + json.dumps(market, sort_keys=True)
                 + "\n\nPROVISIONAL VERDICT:\n" + json.dumps(original_verdict, sort_keys=True)
                 + "\n\nDISPUTED RULE:\n" + str(latest_challenge.get("disputed_rule"))
-                + "\n\nCHALLENGER COUNTER-EVIDENCE URLS:\n" + json.dumps(latest_challenge.get("evidence_urls"))
+                + "\n\nRETRIEVED CHALLENGER COUNTER-EVIDENCE:\n" + json.dumps(counter_evidence)[:16000]
                 + "\n\nCHALLENGER EXPLANATION:\n" + str(latest_challenge.get("explanation"))
-                + "\n\nADDITIONAL CONTEXT:\n" + json.dumps(payload)[:4000]
                 + "\n\nRETURN A JSON OBJECT WITH THE SAME FIELDS AS THE ORIGINAL VERDICT."
             )
             parsed = gl.nondet.exec_prompt(task, response_format="json")
@@ -383,6 +406,8 @@ class PravaxResolver(gl.Contract):
         reviewed = gl.eq_principle.prompt_comparative(nondet_review, principle=VERDICT_EQUIVALENCE_PRINCIPLE)
 
         self.resolutions[market_id] = json.dumps(reviewed, sort_keys=True)
+        market["challenge_deadline"] = _add_seconds_iso(_now_iso(), CHALLENGE_WINDOW_SECONDS)
+        self.markets[market_id] = json.dumps(market, sort_keys=True)
         self.market_state[market_id] = "CHALLENGE_WINDOW"
 
     # ------------------------------------------------------------------

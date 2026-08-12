@@ -35,7 +35,7 @@ export function ConstitutionPanel({ market }: { market: MarketRecord }) {
           </RuleRow>
         )}
         <RuleRow label="Constitution hash">
-          <code className="font-mono text-xs text-ink-muted">{market.constitution_hash}</code>
+          <span className="text-xs text-ink-muted">Locked on-chain</span>
         </RuleRow>
       </dl>
     </div>

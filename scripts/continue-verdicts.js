@@ -4,7 +4,6 @@
 const { createClient, createAccount } = require("genlayer-js");
 const { studionet } = require("genlayer-js/chains");
 const { TransactionStatus } = require("genlayer-js/types");
-const crypto = require("crypto");
 
 const CONTRACT = "0x638e4DdEDDFa964D714C1C1a952C4f95149FC9aB";
 const account = createAccount();
@@ -46,7 +45,7 @@ async function writeAndWait(functionName, args, label) {
       () => client.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED, retries: 30, interval: 6000 }),
       `${label} wait`
     );
-  } catch (e) {
+  } catch {
     // Timed out polling for ACCEPTED specifically; keep polling the same tx
     // via getTransaction until it reaches a terminal status instead of
     // resubmitting (resubmitting would double the on-chain action).
@@ -66,13 +65,9 @@ async function writeAndWait(functionName, args, label) {
   return receipt;
 }
 
-async function sha256Hex(input) {
-  return crypto.createHash("sha256").update(input).digest("hex");
-}
-
 async function resolveWithRetries(marketId, maxTries = 3) {
   for (let i = 1; i <= maxTries; i++) {
-    const receipt = await writeAndWait("resolve_market", [marketId, JSON.stringify({})], `${marketId} resolve (try ${i})`);
+    const receipt = await writeAndWait("resolve_market", [marketId], `${marketId} resolve (try ${i})`);
     const statusName = receipt.statusName ?? "";
     const resultName = receipt.result_name ?? "";
     if (statusName === "CANCELED" || resultName === "NO_MAJORITY") {
@@ -142,8 +137,7 @@ const NEW_MARKETS = [
 
   for (const m of NEW_MARKETS) {
     const marketJson = JSON.stringify(m.market);
-    const hash = await sha256Hex(marketJson);
-    await writeAndWait("create_market", [m.id, marketJson, hash], `${m.label} create`);
+    await writeAndWait("create_market", [m.id, marketJson], `${m.label} create`);
     await writeAndWait("lock_market", [m.id], `${m.label} lock`);
     await resolveWithRetries(m.id);
     const resolution = await withRetry(

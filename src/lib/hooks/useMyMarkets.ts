@@ -18,15 +18,14 @@ export function useMyMarkets(address: string | null): { markets: MarketView[]; l
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!address || !pravax.isConfigured()) {
-      setMarkets([]);
-      return;
-    }
+    if (!address || !pravax.isConfigured()) return;
 
     let cancelled = false;
-    setLoading(true);
 
     (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      setLoading(true);
       try {
         const idsRaw = await pravax.getUserMarkets(address);
         const ids: string[] = JSON.parse(idsRaw);
@@ -76,5 +75,6 @@ export function useMyMarkets(address: string | null): { markets: MarketView[]; l
     };
   }, [address]);
 
-  return { markets, loading };
+  const active = Boolean(address && pravax.isConfigured());
+  return { markets: active ? markets : [], loading: active && loading };
 }

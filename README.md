@@ -76,7 +76,7 @@ Exceptional: UNRESOLVED, INVALID, CANCELLED_BEFORE_LOCK
 Deterministic:
 
 ```python
-create_market(market_id, market_json, constitution_hash) -> None
+create_market(market_id, market_json) -> None
 lock_market(market_id) -> None
 record_position(position_id, market_id, position_json) -> None
 submit_challenge(market_id, challenge_id, challenge_json) -> None
@@ -93,8 +93,8 @@ get_protocol_stats() -> str
 Non-deterministic:
 
 ```python
-resolve_market(market_id, resolution_payload_json) -> None
-review_challenge(market_id, review_payload_json) -> None
+resolve_market(market_id) -> None
+review_challenge(market_id) -> None
 ```
 
 `resolve_market` fetches the market's `primary_sources` / `secondary_sources`, prompts validators
@@ -196,17 +196,16 @@ genlayer schema <deployed-address>   # verify the ABI matches src/lib/genlayer/c
 `PravaxResolver` is deployed on **studionet** at:
 
 ```
-0x638e4DdEDDFa964D714C1C1a952C4f95149FC9aB
+0xfA1060f3b10997250fF7E9C962cE38DFa87EdA90
 ```
 
-The address was supplied directly (this environment has no funded GenLayer account or signing
-channel to perform the deployment itself — see "Known limitations"). It was independently
-verified from this repository with a live `genlayer-js` read call before being wired in:
+The contract was deployed from the unlocked `faultline-dev` Studionet CLI account and independently
+verified with a live `get_protocol_stats` read before being wired in:
 
 ```js
 const client = createClient({ chain: studionet });
 await client.readContract({
-  address: "0x638e4DdEDDFa964D714C1C1a952C4f95149FC9aB",
+  address: "0xfA1060f3b10997250fF7E9C962cE38DFa87EdA90",
   functionName: "get_protocol_stats",
   args: [],
 });

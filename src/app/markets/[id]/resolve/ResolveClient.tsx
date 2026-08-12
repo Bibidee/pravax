@@ -52,8 +52,7 @@ export function ResolveClient({ view }: { view: MarketView }) {
       await pravax.resolveMarket(
         address,
         (window as unknown as { ethereum: unknown }).ethereum,
-        view.id,
-        JSON.stringify({})
+        view.id
       );
       setState("finalized");
       router.refresh();

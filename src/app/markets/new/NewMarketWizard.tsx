@@ -23,12 +23,6 @@ const EMPTY: ResolutionConstitution = {
   ambiguity_policy: "",
 };
 
-async function sha256Hex(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 // datetime-local inputs need "YYYY-MM-DDTHH:mm" in local time; without this,
 // the input can't be pre-filled from stored ISO state, so it always renders
 // blank on re-render (e.g. after navigating Back) even once a value is set.
@@ -81,9 +75,8 @@ export function NewMarketWizard() {
     setTxState("signing");
     try {
       const marketJson = JSON.stringify(parsed.data);
-      const hash = await sha256Hex(marketJson);
       const marketId = `m-${Date.now()}`;
-      await pravax.createMarket(address, (window as unknown as { ethereum: unknown }).ethereum, marketId, marketJson, hash);
+      await pravax.createMarket(address, (window as unknown as { ethereum: unknown }).ethereum, marketId, marketJson);
       setTxState("finalized");
       router.push(`/markets/${marketId}`);
     } catch (err) {

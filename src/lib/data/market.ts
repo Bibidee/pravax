@@ -42,10 +42,7 @@ async function tryLiveMarket(id: string): Promise<MarketView | null> {
 }
 
 export async function getMarketView(id: string): Promise<MarketView | null> {
-  const live = await tryLiveMarket(id);
-  if (live) return live;
-
   const demo = getDemoMarket(id);
-  if (!demo) return null;
-  return { id: demo.id, market: demo.market, resolution: demo.resolution, challenges: demo.challenges ?? [], isDemo: true };
+  if (demo) return { id: demo.id, market: demo.market, resolution: demo.resolution, challenges: demo.challenges ?? [], isDemo: true };
+  return tryLiveMarket(id);
 }

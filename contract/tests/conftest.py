@@ -33,9 +33,11 @@ class _FakeNondet:
 
     web = _FakeNondetWeb
     prompt_response = None
+    last_task = None
 
     @staticmethod
     def exec_prompt(task: str, response_format: str = "text"):
+        _FakeNondet.last_task = task
         if _FakeNondet.prompt_response is None:
             raise RuntimeError("prompt_response not configured for this test")
         return _FakeNondet.prompt_response

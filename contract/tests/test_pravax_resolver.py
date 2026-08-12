@@ -52,7 +52,7 @@ def new_contract():
 
 def create_and_lock(contract, market_id="m1", **overrides):
     set_sender(CREATOR)
-    contract.create_market(market_id, json.dumps(valid_market(**overrides)), "hash123")
+    contract.create_market(market_id, json.dumps(valid_market(**overrides)))
     contract.lock_market(market_id)
     return market_id
 
@@ -64,17 +64,18 @@ def create_and_lock(contract, market_id="m1", **overrides):
 
 def test_create_market_success():
     c = new_contract()
-    c.create_market("m1", json.dumps(valid_market()), "hash123")
+    c.create_market("m1", json.dumps(valid_market()))
     market = json.loads(c.get_market("m1"))
     assert market["state"] == "OPEN"
     assert market["creator"].lower() == CREATOR.lower()
+    assert "constitution_hash" not in market
 
 
 def test_create_market_duplicate_id_rejected():
     c = new_contract()
-    c.create_market("m1", json.dumps(valid_market()), "hash123")
+    c.create_market("m1", json.dumps(valid_market()))
     try:
-        c.create_market("m1", json.dumps(valid_market()), "hash456")
+        c.create_market("m1", json.dumps(valid_market()))
         assert False, "expected duplicate rejection"
     except Exception as e:
         assert "already exists" in str(e)
@@ -85,7 +86,7 @@ def test_create_market_rejects_missing_deadline():
     bad = valid_market()
     del bad["resolve_after"]
     try:
-        c.create_market("m1", json.dumps(bad), "hash123")
+        c.create_market("m1", json.dumps(bad))
         assert False
     except Exception as e:
         assert "resolve_after" in str(e)
@@ -94,7 +95,7 @@ def test_create_market_rejects_missing_deadline():
 def test_create_market_rejects_empty_outcomes():
     c = new_contract()
     try:
-        c.create_market("m1", json.dumps(valid_market(outcomes=[])), "hash123")
+        c.create_market("m1", json.dumps(valid_market(outcomes=[])))
         assert False
     except Exception as e:
         assert "outcomes" in str(e)
@@ -103,16 +104,26 @@ def test_create_market_rejects_empty_outcomes():
 def test_create_market_rejects_impossible_source_policy():
     c = new_contract()
     try:
-        c.create_market("m1", json.dumps(valid_market(primary_sources=[])), "hash123")
+        c.create_market("m1", json.dumps(valid_market(primary_sources=[])))
         assert False
     except Exception as e:
         assert "primary source" in str(e)
 
 
+def test_create_market_rejects_invalid_timestamps_and_source_urls():
+    c = new_contract()
+    for invalid in (valid_market(close_at="tomorrow"), valid_market(primary_sources=["file:///etc/passwd"])):
+        try:
+            c.create_market("m" + str(len(c.markets)), json.dumps(invalid))
+            assert False
+        except Exception as e:
+            assert "ISO-8601" in str(e) or "http(s)" in str(e)
+
+
 def test_create_market_rejects_harmful_framing():
     c = new_contract()
     try:
-        c.create_market("m1", json.dumps(valid_market(question="Will the assassination of X happen?")), "hash1")
+        c.create_market("m1", json.dumps(valid_market(question="Will the assassination of X happen?")))
         assert False
     except Exception as e:
         assert "harmful" in str(e)
@@ -121,7 +132,7 @@ def test_create_market_rejects_harmful_framing():
 def test_malformed_json_rejected():
     c = new_contract()
     try:
-        c.create_market("m1", "{not valid json", "hash123")
+        c.create_market("m1", "{not valid json")
         assert False
     except Exception as e:
         assert "not valid JSON" in str(e)
@@ -129,7 +140,7 @@ def test_malformed_json_rejected():
 
 def test_unauthorized_lock_rejected():
     c = new_contract()
-    c.create_market("m1", json.dumps(valid_market()), "hash123")
+    c.create_market("m1", json.dumps(valid_market()))
     set_sender(PARTICIPANT)
     try:
         c.lock_market("m1")
@@ -159,7 +170,7 @@ def test_cannot_resolve_before_resolution_time():
     set_clock("2026-11-30T00:00:00Z")  # before resolve_after
     conftest._FakeNondet.prompt_response = {"verdict": "YES", "confidence": 90, "reasoning_summary": "x"}
     try:
-        c.resolve_market(market_id, json.dumps({}))
+        c.resolve_market(market_id)
         assert False
     except Exception as e:
         assert "resolution time" in str(e)
@@ -167,10 +178,10 @@ def test_cannot_resolve_before_resolution_time():
 
 def test_cannot_resolve_market_not_locked():
     c = new_contract()
-    c.create_market("m1", json.dumps(valid_market()), "hash123")
+    c.create_market("m1", json.dumps(valid_market()))
     set_clock("2026-12-02T00:00:00Z")
     try:
-        c.resolve_market("m1", json.dumps({}))
+        c.resolve_market("m1")
         assert False
     except Exception as e:
         assert "LOCKED" in str(e)
@@ -184,7 +195,7 @@ def test_cannot_resolve_market_not_locked():
 def _resolve_with(c, market_id, verdict_payload):
     conftest._FakeNondet.prompt_response = verdict_payload
     set_clock("2026-12-01T01:00:00Z")
-    c.resolve_market(market_id, json.dumps({}))
+    c.resolve_market(market_id)
 
 
 def test_valid_yes_resolution():
@@ -246,10 +257,22 @@ def test_duplicate_resolution_prevented():
     market_id = create_and_lock(c)
     _resolve_with(c, market_id, {"verdict": "YES", "confidence": 90, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
     try:
-        c.resolve_market(market_id, json.dumps({}))
+        c.resolve_market(market_id)
         assert False
     except Exception as e:
         assert "LOCKED" in str(e)
+
+
+def test_resolution_uses_only_the_stored_constitution_and_fixed_deadline():
+    c = new_contract()
+    market_id = create_and_lock(c)
+    conftest._FakeNondet.prompt_response = {"verdict": "YES", "confidence": 90, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"}
+    set_clock("2026-12-01T01:00:00Z")
+    c.resolve_market(market_id)
+    market = json.loads(c.get_market(market_id))
+    assert market["challenge_deadline"] == "2026-12-02T01:00:00Z"
+    assert "github.com/example/atlas/releases" in conftest._FakeNondet.last_task
+    assert "attacker.example" not in conftest._FakeNondet.last_task
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +310,7 @@ def test_challenge_lifecycle_and_review():
         "conflicts": [],
         "reasoning_summary": "reviewed challenger evidence",
     }
-    c.review_challenge(market_id, json.dumps({}))
+    c.review_challenge(market_id)
     resolution = json.loads(c.get_resolution(market_id))
     assert resolution["verdict"] == "YES"
     assert json.loads(c.get_market(market_id))["state"] == "CHALLENGE_WINDOW"
@@ -315,6 +338,43 @@ def test_challenge_requires_counter_evidence():
         assert False
     except Exception as e:
         assert "counter-evidence" in str(e)
+
+
+def test_challenge_after_deadline_and_finalizing_a_challenge_are_rejected():
+    c = new_contract()
+    market_id = create_and_lock(c)
+    _resolve_with(c, market_id, {"verdict": "NO", "confidence": 60, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
+    market = json.loads(c.get_market(market_id))
+    set_clock(market["challenge_deadline"])
+    set_sender(CHALLENGER)
+    payload = {"challenged_verdict": "NO", "claimed_verdict": "YES", "disputed_rule": "x", "explanation": "x", "evidence_urls": ["https://example.com/evidence"]}
+    try:
+        c.submit_challenge(market_id, "late", json.dumps(payload))
+        assert False
+    except Exception as e:
+        assert "closed" in str(e)
+
+    set_clock("2026-12-01T02:00:00Z")
+    c.submit_challenge(market_id, "timely", json.dumps(payload))
+    try:
+        c.finalize_resolution(market_id)
+        assert False
+    except Exception as e:
+        assert "CHALLENGED" in str(e)
+
+
+def test_review_fetches_counter_evidence_and_opens_a_new_window():
+    c = new_contract()
+    market_id = create_and_lock(c)
+    _resolve_with(c, market_id, {"verdict": "NO", "confidence": 60, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
+    set_sender(CHALLENGER)
+    url = "https://example.com/evidence"
+    c.submit_challenge(market_id, "ch1", json.dumps({"challenged_verdict": "NO", "claimed_verdict": "YES", "disputed_rule": "x", "explanation": "x", "evidence_urls": [url]}))
+    conftest._FakeNondetWeb.responses[url] = "Counter evidence contents"
+    conftest._FakeNondet.prompt_response = {"verdict": "YES", "confidence": 88, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"}
+    c.review_challenge(market_id)
+    assert "Counter evidence contents" in conftest._FakeNondet.last_task
+    assert json.loads(c.get_market(market_id))["challenge_deadline"] == "2026-12-02T01:00:00Z"
 
 
 # ---------------------------------------------------------------------------
@@ -371,12 +431,24 @@ def test_unauthorized_position_mutation_rejected_after_lock():
 
 def test_record_position_while_open():
     c = new_contract()
-    c.create_market("m1", json.dumps(valid_market()), "hash123")
+    c.create_market("m1", json.dumps(valid_market()))
     set_sender(PARTICIPANT)
     c.record_position("p1", "m1", json.dumps({"outcome": "YES", "amount": 25}))
     positions = json.loads(c.get_positions("m1"))
     assert len(positions) == 1
     assert positions[0]["holder"].lower() == PARTICIPANT.lower()
+
+
+def test_position_rejects_unknown_outcomes_and_non_finite_amounts():
+    c = new_contract()
+    c.create_market("m1", json.dumps(valid_market()))
+    set_sender(PARTICIPANT)
+    for payload in ({"outcome": "MAYBE", "amount": 1}, {"outcome": "YES", "amount": True}):
+        try:
+            c.record_position("p" + str(len(c.get_positions("m1"))), "m1", json.dumps(payload))
+            assert False
+        except Exception as e:
+            assert "outcome" in str(e) or "positive" in str(e)
 
 
 def test_protocol_stats_track_lifecycle():

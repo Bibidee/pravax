@@ -8,7 +8,6 @@
 const { createClient, createAccount } = require("genlayer-js");
 const { studionet } = require("genlayer-js/chains");
 const { TransactionStatus } = require("genlayer-js/types");
-const crypto = require("crypto");
 
 const CONTRACT = "0x638e4DdEDDFa964D714C1C1a952C4f95149FC9aB";
 
@@ -66,10 +65,6 @@ async function writeAndWait(functionName, args, label) {
   log(`   status=${receipt.statusName ?? receipt.status} result=${receipt.result}`);
   await sleep(4000);
   return receipt;
-}
-
-async function sha256Hex(input) {
-  return crypto.createHash("sha256").update(input).digest("hex");
 }
 
 const ALL_MARKETS = [
@@ -136,11 +131,9 @@ const ALL_MARKETS = [
 
   for (const m of ALL_MARKETS) {
     const marketJson = JSON.stringify(m.market);
-    const hash = await sha256Hex(marketJson);
-
-    await writeAndWait("create_market", [m.id, marketJson, hash], `${m.label} create`);
+    await writeAndWait("create_market", [m.id, marketJson], `${m.label} create`);
     await writeAndWait("lock_market", [m.id], `${m.label} lock`);
-    await writeAndWait("resolve_market", [m.id, JSON.stringify({})], `${m.label} resolve`);
+    await writeAndWait("resolve_market", [m.id], `${m.label} resolve`);
 
     const resolution = await withRateLimitRetry(
       () =>
