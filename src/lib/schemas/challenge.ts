@@ -15,9 +15,9 @@ export const ChallengeSchema = z.object({
   challenge_id: z.string(),
   challenged_verdict: VerdictSchema,
   claimed_verdict: VerdictSchema,
-  disputed_rule: z.string().min(5),
+  disputed_rule: z.string().min(5).max(2000),
   evidence_urls: z.array(httpUrl).min(1, "At least one counter-evidence URL is required"),
-  explanation: z.string().min(10),
+  explanation: z.string().min(10).max(2000),
   challenger: z.string(),
   submitted_at: z.string(),
 });

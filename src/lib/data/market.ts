@@ -1,13 +1,18 @@
 import { pravax } from "@/lib/genlayer/contracts/pravax";
 import type { MarketRecord } from "@/lib/schemas/market";
 import type { Resolution } from "@/lib/schemas/resolution";
+import { MarketRecordSchema, PositionSchema } from "@/lib/schemas/market";
+import { ResolutionSchema } from "@/lib/schemas/resolution";
+import { ChallengeSchema } from "@/lib/schemas/challenge";
 import type { Challenge } from "@/lib/schemas/challenge";
+import type { Position } from "@/lib/schemas/market";
 
 export type MarketView = {
   id: string;
   market: MarketRecord;
   resolution?: Resolution;
   challenges: Challenge[];
+  positions: Position[];
   isDemo: boolean;
 };
 
@@ -34,7 +39,11 @@ async function tryLiveMarket(id: string): Promise<MarketView | null> {
       challenges = [];
     }
 
-    return { id, market: parsed as MarketRecord, resolution, challenges, isDemo: false };
+    const market = MarketRecordSchema.parse(parsed);
+    const resolutionValue = resolution ? ResolutionSchema.parse(resolution) : undefined;
+    const challengeValues = challenges.map((item) => ChallengeSchema.parse(item));
+    const positions = JSON.parse(await pravax.getPositions(id));
+    return { id, market, resolution: resolutionValue, challenges: challengeValues, positions: positions.map((item: unknown) => PositionSchema.parse(item)), isDemo: false };
   } catch {
     return null;
   }

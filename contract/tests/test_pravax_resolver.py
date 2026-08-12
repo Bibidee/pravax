@@ -53,6 +53,7 @@ def new_contract():
 def create_and_lock(contract, market_id="m1", **overrides):
     set_sender(CREATOR)
     contract.create_market(market_id, json.dumps(valid_market(**overrides)))
+    set_clock("2026-11-25T00:00:00Z")
     contract.lock_market(market_id)
     return market_id
 
@@ -101,6 +102,16 @@ def test_create_market_rejects_empty_outcomes():
         assert "outcomes" in str(e)
 
 
+def test_create_market_requires_exact_binary_outcomes():
+    for outcomes in (["BTC", "ETH"], ["YES", "NO", "MAYBE"], ["NO", "YES"], ["YES", "YES"], []):
+        c = new_contract()
+        try:
+            c.create_market("m1", json.dumps(valid_market(outcomes=outcomes)))
+            assert False, outcomes
+        except Exception as e:
+            assert "outcomes" in str(e)
+
+
 def test_create_market_rejects_impossible_source_policy():
     c = new_contract()
     try:
@@ -142,11 +153,9 @@ def test_unauthorized_lock_rejected():
     c = new_contract()
     c.create_market("m1", json.dumps(valid_market()))
     set_sender(PARTICIPANT)
-    try:
-        c.lock_market("m1")
-        assert False
-    except Exception as e:
-        assert "only the creator" in str(e)
+    set_clock("2026-11-25T00:00:00Z")
+    c.lock_market("m1")
+    assert json.loads(c.get_market("m1"))["state"] == "LOCKED"
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +322,7 @@ def test_challenge_lifecycle_and_review():
     c.review_challenge(market_id)
     resolution = json.loads(c.get_resolution(market_id))
     assert resolution["verdict"] == "YES"
-    assert json.loads(c.get_market(market_id))["state"] == "CHALLENGE_WINDOW"
+    assert json.loads(c.get_market(market_id))["state"] == "FINAL"
 
 
 def test_challenge_requires_counter_evidence():

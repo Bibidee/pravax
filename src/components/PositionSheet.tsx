@@ -15,7 +15,7 @@ export function PositionSheet({
   walletConnected: boolean;
   contractConfigured: boolean;
 }) {
-  const [outcome, setOutcome] = useState(market.outcomes[0]);
+  const [outcome, setOutcome] = useState<"YES" | "NO">("YES");
   const [amount, setAmount] = useState(10);
   const [txState, setTxState] = useState<TxState>("idle");
 

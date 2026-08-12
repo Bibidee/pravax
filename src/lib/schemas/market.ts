@@ -14,19 +14,7 @@ const httpUrl = z
     message: "URL must start with http:// or https://",
   });
 
-export const MarketStateSchema = z.enum([
-  "DRAFT",
-  "OPEN",
-  "LOCKED",
-  "AWAITING_RESOLUTION",
-  "PROVISIONAL",
-  "CHALLENGE_WINDOW",
-  "CHALLENGED",
-  "FINAL",
-  "UNRESOLVED",
-  "INVALID",
-  "CANCELLED_BEFORE_LOCK",
-]);
+export const MarketStateSchema = z.enum(["OPEN", "LOCKED", "CHALLENGE_WINDOW", "CHALLENGED", "FINAL"]);
 export type MarketState = z.infer<typeof MarketStateSchema>;
 
 export const MarketCategorySchema = z.enum([
@@ -41,17 +29,17 @@ export type MarketCategory = z.infer<typeof MarketCategorySchema>;
 // still use .extend() — Zod's .refine()/.superRefine() return a ZodEffects
 // wrapper that no longer supports .extend().
 const ResolutionConstitutionObject = z.object({
-  question: z.string().min(12, "Question must be specific enough to resolve unambiguously"),
+  question: z.string().min(12, "Question must be specific enough to resolve unambiguously").max(2000),
   category: MarketCategorySchema.default("OTHER"),
-  outcomes: z.array(z.string().min(1)).min(2).max(6),
+  outcomes: z.tuple([z.literal("YES"), z.literal("NO")]),
   close_at: z.string().min(1, "Close at is required").datetime({ offset: true }).or(z.string().min(1, "Close at is required")),
   resolve_after: z.string().min(1, "Resolves after is required").datetime({ offset: true }).or(z.string().min(1, "Resolves after is required")),
   event_deadline: z.string().min(1, "Event deadline is required").datetime({ offset: true }).or(z.string().min(1, "Event deadline is required")),
   primary_sources: z.array(httpUrl).min(1, "At least one primary source is required"),
   secondary_sources: z.array(httpUrl).default([]),
-  definition: z.string().min(10, "Define exactly what counts as a qualifying event"),
-  invalid_if: z.array(z.string()).default([]),
-  ambiguity_policy: z.string().min(10, "State how ambiguous or conflicting evidence is handled"),
+  definition: z.string().min(10, "Define exactly what counts as a qualifying event").max(2000),
+  invalid_if: z.array(z.string().max(2000)).max(12).default([]),
+  ambiguity_policy: z.string().min(10, "State how ambiguous or conflicting evidence is handled").max(2000),
   clarification_notes: z.string().optional(),
 });
 
@@ -87,13 +75,15 @@ export const MarketRecordSchema = ResolutionConstitutionObject.extend({
   created_at: z.string(),
   locked_at: z.string().optional(),
   challenge_deadline: z.string().optional(),
+  reviewed_at: z.string().optional(),
+  finalized_at: z.string().optional(),
   state: MarketStateSchema,
 });
 export type MarketRecord = z.infer<typeof MarketRecordSchema>;
 
 export const PositionSchema = z.object({
   position_id: z.string(),
-  outcome: z.string(),
+  outcome: z.enum(["YES", "NO"]),
   amount: z.number().positive(),
   holder: z.string(),
   recorded_at: z.string(),

@@ -52,7 +52,14 @@ export function useMyMarkets(address: string | null): { markets: MarketView[]; l
                 challenges = [];
               }
 
-              return { id, market, resolution, challenges, isDemo: false };
+              let positions = [];
+              try {
+                positions = JSON.parse(await pravax.getPositions(id));
+              } catch {
+                positions = [];
+              }
+
+              return { id, market, resolution, challenges, positions, isDemo: false };
             } catch {
               return null;
             }

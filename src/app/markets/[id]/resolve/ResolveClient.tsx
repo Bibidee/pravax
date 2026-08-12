@@ -18,7 +18,7 @@ export function ResolveClient({ view }: { view: MarketView }) {
   const [error, setError] = useState<string | null>(null);
 
   if (view.resolution) {
-    return <VerdictPanel resolution={view.resolution} provisional={view.market.state === "CHALLENGE_WINDOW"} />;
+    return <VerdictPanel resolution={view.resolution} provisional={view.market.state === "CHALLENGE_WINDOW" || view.market.state === "CHALLENGED"} />;
   }
 
   const eligible = isPast(new Date(view.market.resolve_after));

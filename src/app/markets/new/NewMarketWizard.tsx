@@ -122,21 +122,12 @@ export function NewMarketWizard() {
                 value={o}
                 onChange={(e) => {
                   const next = [...form.outcomes];
-                  next[i] = e.target.value;
-                  update("outcomes", next);
+                  next[i] = e.target.value as "YES" | "NO";
+                  update("outcomes", next as ["YES", "NO"]);
                 }}
                 className="w-full rounded border border-border bg-canvas-raised px-3 py-2 text-sm"
               />
             ))}
-            {form.outcomes.length < 6 && (
-              <button
-                type="button"
-                onClick={() => update("outcomes", [...form.outcomes, ""])}
-                className="text-sm text-accent underline underline-offset-2"
-              >
-                + add outcome
-              </button>
-            )}
           </div>
         )}
 

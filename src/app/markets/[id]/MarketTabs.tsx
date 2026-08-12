@@ -10,7 +10,6 @@ import { ChallengeCard } from "@/components/ChallengeCard";
 import { TimelineEvent } from "@/components/TimelineEvent";
 import { EmptyState } from "@/components/EmptyState";
 import { PositionSheet } from "@/components/PositionSheet";
-import { ProbabilityBar } from "@/components/ProbabilityBar";
 import { TransactionStatus, type TxState } from "@/components/TransactionStatus";
 import { formatUtc } from "@/lib/format";
 import { useWallet } from "@/lib/wallet/useWallet";
@@ -25,6 +24,10 @@ export function MarketTabs({ view }: { view: MarketView }) {
   const [tab, setTab] = useState<Tab>("MARKET");
   const { address } = useWallet();
   const { market, resolution, challenges, isDemo, id } = view;
+  const positions = view.positions ?? [];
+  const yes = positions.filter((p) => p.outcome === "YES").reduce((sum, p) => sum + p.amount, 0);
+  const no = positions.filter((p) => p.outcome === "NO").reduce((sum, p) => sum + p.amount, 0);
+  const total = yes + no;
   const [lockState, setLockState] = useState<TxState>("idle");
   const [lockError, setLockError] = useState<string | null>(null);
 
@@ -68,21 +71,12 @@ export function MarketTabs({ view }: { view: MarketView }) {
       {tab === "MARKET" && (
         <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
           <div className="space-y-6">
-            {market.outcomes.length === 2 ? (
-              <ProbabilityBar
-                outcomes={[
-                  { label: market.outcomes[0], percent: 64, tone: "yes" },
-                  { label: market.outcomes[1], percent: 36, tone: "no" },
-                ]}
-              />
-            ) : (
-              <p className="text-sm text-ink-muted">Outcomes: {market.outcomes.join(", ")}</p>
-            )}
+            {total > 0 ? <div className="space-y-1 text-sm text-ink-muted"><p>Test position share — YES: {((yes / total) * 100).toFixed(0)}%</p><p>Test position share — NO: {((no / total) * 100).toFixed(0)}%</p></div> : <p className="text-sm text-ink-muted">No test positions yet.</p>}
             <div className="text-sm text-ink-muted">
               <p>Creator: {market.creator}</p>
               <p>Created {formatUtc(market.created_at)}</p>
             </div>
-            {market.state === "OPEN" && address?.toLowerCase() === market.creator.toLowerCase() && !isDemo && (
+            {market.state === "OPEN" && !isDemo && (
               <div className="space-y-2">
                 <button
                   type="button"
@@ -133,7 +127,7 @@ export function MarketTabs({ view }: { view: MarketView }) {
 
       {tab === "RESOLUTION" &&
         (resolution ? (
-          <VerdictPanel resolution={resolution} provisional={market.state === "CHALLENGE_WINDOW"} />
+          <VerdictPanel resolution={resolution} provisional={market.state === "CHALLENGE_WINDOW" || market.state === "CHALLENGED"} />
         ) : (
           <EmptyState
             title="Not resolved yet"
@@ -175,8 +169,8 @@ export function MarketTabs({ view }: { view: MarketView }) {
           {challenges.map((c) => (
             <TimelineEvent key={c.challenge_id} label="Challenge filed" timestamp={formatUtc(c.submitted_at)} />
           ))}
-          {market.state === "FINAL" && market.challenge_deadline && (
-            <TimelineEvent label="Finalized" timestamp={formatUtc(market.challenge_deadline)} isLast />
+          {market.state === "FINAL" && market.finalized_at && (
+            <TimelineEvent label="Finalized" timestamp={formatUtc(market.finalized_at)} isLast />
           )}
         </div>
       )}

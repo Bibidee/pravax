@@ -51,8 +51,7 @@ src/
       client.ts            genlayer-js read/write client factories
       contracts/pravax.ts  Single service layer — all contract calls go through here
     schemas/               Zod schemas mirroring the contract's JSON records
-    data/market.ts          Live-contract-first, demo-fallback data access
-    demo/seedMarkets.ts     Labeled illustrative templates (never presented as on-chain)
+    data/market.ts          Live-contract data access with schema validation
     wallet/useWallet.ts     Minimal injected-wallet (window.ethereum) hook
 ```
 
@@ -64,9 +63,8 @@ UI components never call RPC helpers directly — every read/write goes through
 ### State machine
 
 ```
-DRAFT -> OPEN -> LOCKED -> AWAITING_RESOLUTION -> PROVISIONAL
-      -> CHALLENGE_WINDOW -> FINAL
-Exceptional: UNRESOLVED, INVALID, CANCELLED_BEFORE_LOCK
+OPEN -> LOCKED -> CHALLENGE_WINDOW -> FINAL
+CHALLENGED is a pending independent review; YES/NO/INVALID/UNRESOLVED are verdicts.
 ```
 
 `UNRESOLVED` is a first-class terminal state, not an error and never collapsed into `NO`.
@@ -217,10 +215,7 @@ live instance of this contract responding on studionet, not a fabricated address
 
 `NEXT_PUBLIC_GENLAYER_NETWORK=studionet` and `NEXT_PUBLIC_PRAVAX_CONTRACT_ADDRESS` are set in
 `.env.local` (and mirrored in `.env.example`). The frontend now reads real contract state via
-`pravax.isConfigured()` returning `true` — the demo-mode banner and "Template" labels only appear
-as a per-market fallback when `get_market` returns `{"error": "not_found"}` for an id that isn't
-on-chain yet (i.e. the three seeded templates, until real markets are created against this
-address).
+`pravax.isConfigured()` returning `true`; the UI renders only schema-validated on-chain markets.
 
 No market has been created against this deployment yet from this session — `markets_created` is
 `0` as shown above. Creating one requires a connected wallet with a funded studionet account (get
@@ -295,9 +290,8 @@ against the real SDK and downloaded GenVM runner surfaced concrete errors, all n
   path, and cross-validator Equivalence Principle behavior have not been exercised end-to-end from
   here yet.
 - **No on-chain market index** — the contract is keyed by market id, not enumerable. `/markets`
-  currently lists demo templates only; the deployed instance has zero real markets on it so far
-  (`markets_created: 0`). Discovering real markets once some exist needs either an off-chain
-  indexer or a `get_user_markets`-driven "my markets" view.
+  currently discovers markets through `get_user_markets`; global anonymous discovery requires the
+  on-chain market-id index planned for the next contract deployment.
 - **Wallet layer is intentionally minimal** — a direct `window.ethereum` hook rather than a full
   wagmi provider tree, since `genlayer-js` already owns chain switching (`client.connect()`) and
   transaction signing. `wagmi`/`viem`/`@tanstack/react-query` are installed and available if a

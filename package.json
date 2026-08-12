@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "contract-test": "python -m pytest contract/tests -q",
+    "verify": "npm run lint && npm run typecheck && npm run contract-test && npm run build"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",
