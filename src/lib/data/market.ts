@@ -1,5 +1,4 @@
 import { pravax } from "@/lib/genlayer/contracts/pravax";
-import { getDemoMarket } from "@/lib/demo/seedMarkets";
 import type { MarketRecord } from "@/lib/schemas/market";
 import type { Resolution } from "@/lib/schemas/resolution";
 import type { Challenge } from "@/lib/schemas/challenge";
@@ -42,7 +41,5 @@ async function tryLiveMarket(id: string): Promise<MarketView | null> {
 }
 
 export async function getMarketView(id: string): Promise<MarketView | null> {
-  const demo = getDemoMarket(id);
-  if (demo) return { id: demo.id, market: demo.market, resolution: demo.resolution, challenges: demo.challenges ?? [], isDemo: true };
   return tryLiveMarket(id);
 }

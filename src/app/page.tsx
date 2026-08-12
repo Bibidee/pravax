@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { MarketCard } from "@/components/MarketCard";
-import { DEMO_MARKETS } from "@/lib/demo/seedMarkets";
 import { useWallet } from "@/lib/wallet/useWallet";
 import { useMyMarkets } from "@/lib/hooks/useMyMarkets";
 
@@ -10,14 +9,7 @@ export default function Home() {
   const { address } = useWallet();
   const { markets: myMarkets } = useMyMarkets(address);
 
-  const demo = DEMO_MARKETS.map((d) => ({
-    id: d.id,
-    market: d.market,
-    resolution: d.resolution,
-    challenges: d.challenges ?? [],
-    isDemo: true,
-  }));
-  const markets = [...myMarkets, ...demo];
+  const markets = myMarkets;
   const open = markets.filter((m) => m.market.state === "OPEN");
   const resolved = markets.filter((m) => ["FINAL", "UNRESOLVED", "INVALID"].includes(m.market.state));
 
@@ -68,7 +60,7 @@ export default function Home() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {open.map((m) => (
-            <MarketCard key={m.id} id={m.id} market={m.market} isDemo={m.isDemo} yesPercent={m.isDemo ? 64 : undefined} />
+            <MarketCard key={m.id} id={m.id} market={m.market} />
           ))}
         </div>
       </section>
@@ -80,7 +72,7 @@ export default function Home() {
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {resolved.map((m) => (
-            <MarketCard key={m.id} id={m.id} market={m.market} isDemo={m.isDemo} />
+            <MarketCard key={m.id} id={m.id} market={m.market} />
           ))}
         </div>
       </section>

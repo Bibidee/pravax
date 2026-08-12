@@ -8,10 +8,9 @@ import type { MarketView } from "@/lib/data/market";
  * The contract has no enumerable "list all markets" view — it's keyed by id,
  * not indexed. `get_user_markets` tracks every market a given address has
  * created or taken a position in, so once a wallet is connected we can
- * surface that address's real on-chain markets alongside the demo templates.
- * Anonymous visitors (no wallet connected) only see demo templates, since
- * there's no way to discover arbitrary real market ids without a connected
- * address or an off-chain indexer.
+ * surface that address's real on-chain markets. Anonymous visitors cannot
+ * discover arbitrary real market ids without a connected address or an
+ * off-chain indexer.
  */
 export function useMyMarkets(address: string | null): { markets: MarketView[]; loading: boolean } {
   const [markets, setMarkets] = useState<MarketView[]>([]);
