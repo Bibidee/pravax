@@ -130,7 +130,12 @@ def _validate_verdict_shape(parsed: dict, retrieved: dict) -> None:
     _require(isinstance(parsed["reasoning_summary"], str) and 0 < len(parsed["reasoning_summary"]) <= MAX_REASONING, "reasoning_summary is invalid", ERR_LLM)
     _require(isinstance(parsed["evidence"], list) and len(parsed["evidence"]) <= MAX_EVIDENCE, "evidence is invalid", ERR_LLM)
     for item in parsed["evidence"]:
-        _require(isinstance(item, dict) and set(item.keys()) == {"url", "source_role", "claim", "published_at", "event_time"}, "evidence item is invalid", ERR_LLM)
+        _require(
+            isinstance(item, dict)
+            and {"url", "source_role", "claim", "published_at", "event_time"}.issubset(item.keys()),
+            "evidence item is invalid",
+            ERR_LLM,
+        )
         _require(item["url"] in retrieved and item["source_role"] == retrieved[item["url"]], "evidence provenance is invalid", ERR_LLM)
         _require(isinstance(item["claim"], str) and 0 < len(item["claim"]) <= MAX_TEXT, "evidence claim is invalid", ERR_LLM)
         for field in ("published_at", "event_time"):
