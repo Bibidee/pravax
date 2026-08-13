@@ -132,7 +132,7 @@ def _source_packet(records):
 def _validate_verdict_shape(parsed: dict, retrieved: dict) -> None:
     _require(isinstance(parsed, dict), "model response was not a JSON object", ERR_LLM)
     expected = {"verdict", "confidence", "rule_interpretation", "evidence", "conflicts", "reasoning_summary"}
-    _require(set(parsed.keys()) == expected, "model response has unexpected or missing fields", ERR_LLM)
+    _require(expected.issubset(parsed.keys()), "model response has missing required fields", ERR_LLM)
     _require(parsed.get("verdict") in VERDICTS, "verdict missing or out of range", ERR_LLM)
     _require(isinstance(parsed.get("confidence"), int) and 0 <= parsed["confidence"] <= 100, "confidence must be an integer from 0 to 100", ERR_LLM)
     _require(isinstance(parsed["rule_interpretation"], str) and 0 < len(parsed["rule_interpretation"]) <= MAX_TEXT, "rule_interpretation is invalid", ERR_LLM)
@@ -155,6 +155,9 @@ def _validate_verdict_shape(parsed: dict, retrieved: dict) -> None:
     _require(parsed["verdict"] not in ("YES", "NO") or len(normalized_evidence) > 0, "YES/NO verdict requires evidence", ERR_LLM)
     parsed["evidence"] = normalized_evidence
     _require(isinstance(parsed["conflicts"], list) and len(parsed["conflicts"]) <= MAX_CONFLICTS and all(isinstance(x, str) and len(x) <= MAX_TEXT for x in parsed["conflicts"]), "conflicts are invalid", ERR_LLM)
+    normalized = {key: parsed[key] for key in expected}
+    parsed.clear()
+    parsed.update(normalized)
 
 
 class PravaxResolver(gl.Contract):

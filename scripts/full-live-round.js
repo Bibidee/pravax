@@ -5,7 +5,7 @@ const { studionet } = require("genlayer-js/chains");
 const { TransactionStatus } = require("genlayer-js/types");
 const { parseUnits } = require("viem");
 
-const CONTRACT = "0x30bd9c57Aa4E28a071da4AaBF4B8c4293A96150D";
+const CONTRACT = "0x6F6225633bF4652915191350a75ad7467f62fFDA";
 const account = createAccount();
 const client = createClient({ chain: studionet, account });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,7 +21,7 @@ async function write(functionName, args, value = 0n) {
   const receipt = await client.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED, retries: 100, interval: 6000 });
   const result = executionResult(receipt);
   console.log(functionName, { hash, executionResult: result, status: receipt.statusName ?? receipt.status });
-  if (result && result !== "SUCCESS") throw new Error(`${functionName} execution failed: ${result}`);
+  if (result !== "SUCCESS") throw new Error(`${functionName} execution result is not positively proven: ${result ?? "missing"}`);
   return hash;
 }
 
