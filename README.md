@@ -194,20 +194,20 @@ genlayer schema <deployed-address>   # verify the ABI matches src/lib/genlayer/c
 `PravaxResolver` is deployed on **studionet** at:
 
 ```
-0x84aA2fA0832dc5C2716ae5818D5149BD2699b159
+0x30bd9c57Aa4E28a071da4AaBF4B8c4293A96150D
 ```
 
 The current contract was deployed from the unlocked `faultline-dev` Studionet CLI account and independently
 verified with a live `get_protocol_stats` read and schema query before being wired in.
 
-Deployment proof: hardened source SHA-256
-`81B91B31C43C48F31BF2D83F8C295C8BBBD621442A0FBDAD057118B241A36AAA`; network `studionet`;
-transaction `0x44d476f356d1805fb7673e804fe1a73b8f39de35da6aaebe4516725ef7939753`.
+Deployment proof: git commit `ba767c4`; source SHA-256
+`FBBEA0F6EE7D351D8D0334A3B00141F94BD80AD2BCF379D02B3479DD28CA5A7C`; network `studionet`;
+transaction `0xed39280d63cd87f6e62b6827d602b36c03595e6954495c0424e77613eb9590a0`.
 
 ```js
 const client = createClient({ chain: studionet });
 await client.readContract({
-  address: "0x84aA2fA0832dc5C2716ae5818D5149BD2699b159",
+  address: "0x30bd9c57Aa4E28a071da4AaBF4B8c4293A96150D",
   functionName: "get_protocol_stats",
   args: [],
 });
