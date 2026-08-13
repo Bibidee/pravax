@@ -15,6 +15,7 @@ import { formatUtc } from "@/lib/format";
 import { useWallet } from "@/lib/wallet/useWallet";
 import { pravax, TransactionPendingError } from "@/lib/genlayer/contracts/pravax";
 import Link from "next/link";
+import { formatGen } from "@/lib/gen";
 
 const TABS = ["MARKET", "RULES", "EVIDENCE", "RESOLUTION", "CHALLENGES", "ACTIVITY"] as const;
 type Tab = (typeof TABS)[number];
@@ -25,8 +26,9 @@ export function MarketTabs({ view }: { view: MarketView }) {
   const { address } = useWallet();
   const { market, resolution, challenges, isDemo, id } = view;
   const positions = view.positions ?? [];
-  const yes = positions.filter((p) => p.outcome === "YES").reduce((sum, p) => sum + p.amount, 0);
-  const no = positions.filter((p) => p.outcome === "NO").reduce((sum, p) => sum + p.amount, 0);
+  const zero = BigInt(0);
+  const yes = positions.filter((p) => p.outcome === "YES").reduce((sum, p) => sum + BigInt(p.amount), zero);
+  const no = positions.filter((p) => p.outcome === "NO").reduce((sum, p) => sum + BigInt(p.amount), zero);
   const total = yes + no;
   const [lockState, setLockState] = useState<TxState>("idle");
   const [lockError, setLockError] = useState<string | null>(null);
@@ -71,7 +73,7 @@ export function MarketTabs({ view }: { view: MarketView }) {
       {tab === "MARKET" && (
         <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
           <div className="space-y-6">
-            {total > 0 ? <div className="space-y-1 text-sm text-ink-muted"><p>Escrow share — YES: {((yes / total) * 100).toFixed(0)}%</p><p>Escrow share — NO: {((no / total) * 100).toFixed(0)}%</p></div> : <p className="text-sm text-ink-muted">No positions yet.</p>}
+            {total > zero ? <div className="space-y-1 text-sm text-ink-muted"><p>YES escrow share — {(yes * BigInt(100) / total).toString()}%</p><p>NO escrow share — {(no * BigInt(100) / total).toString()}%</p><p>Total escrow: {formatGen(total)} GEN</p></div> : <p className="text-sm text-ink-muted">No positions yet.</p>}
             <div className="text-sm text-ink-muted">
               <p>Creator: {market.creator}</p>
               <p>Created {formatUtc(market.created_at)}</p>

@@ -138,22 +138,22 @@ def _validate_verdict_shape(parsed: dict, retrieved: dict) -> None:
     _require(isinstance(parsed["rule_interpretation"], str) and 0 < len(parsed["rule_interpretation"]) <= MAX_TEXT, "rule_interpretation is invalid", ERR_LLM)
     _require(isinstance(parsed["reasoning_summary"], str) and 0 < len(parsed["reasoning_summary"]) <= MAX_REASONING, "reasoning_summary is invalid", ERR_LLM)
     _require(isinstance(parsed["evidence"], list) and len(parsed["evidence"]) <= MAX_EVIDENCE, "evidence is invalid", ERR_LLM)
+    normalized_evidence = []
     for item in parsed["evidence"]:
         _require(
             isinstance(item, dict) and {"url", "source_role", "claim"}.issubset(item.keys()),
             "evidence item is invalid",
             ERR_LLM,
         )
-        item["published_at"] = item.get("published_at")
-        item["event_time"] = item.get("event_time")
+        published_at = item.get("published_at")
+        event_time = item.get("event_time")
         _require(item["url"] in retrieved and item["source_role"] == retrieved[item["url"]], "evidence provenance is invalid", ERR_LLM)
         _require(isinstance(item["claim"], str) and 0 < len(item["claim"]) <= MAX_TEXT, "evidence claim is invalid", ERR_LLM)
-        for field in ("published_at", "event_time"):
-            if item[field] is not None:
-                try:
-                    _parse_iso_timestamp(item[field], field)
-                except Exception:
-                    _fail(ERR_LLM, f"{field} is invalid")
+        _require(published_at is None or (isinstance(published_at, str) and len(published_at) <= 128), "published_at is invalid", ERR_LLM)
+        _require(event_time is None or (isinstance(event_time, str) and len(event_time) <= 128), "event_time is invalid", ERR_LLM)
+        normalized_evidence.append({"url": item["url"], "source_role": item["source_role"], "claim": item["claim"], "published_at": published_at, "event_time": event_time})
+    _require(parsed["verdict"] not in ("YES", "NO") or len(normalized_evidence) > 0, "YES/NO verdict requires evidence", ERR_LLM)
+    parsed["evidence"] = normalized_evidence
     _require(isinstance(parsed["conflicts"], list) and len(parsed["conflicts"]) <= MAX_CONFLICTS and all(isinstance(x, str) and len(x) <= MAX_TEXT for x in parsed["conflicts"]), "conflicts are invalid", ERR_LLM)
 
 
@@ -241,6 +241,7 @@ class PravaxResolver(gl.Contract):
         _require(isinstance(market.get("invalid_if"), list), "invalid_if must be a list (may be empty)")
         _require(len(market["invalid_if"]) <= 12 and all(isinstance(x, str) and len(x) <= MAX_TEXT for x in market["invalid_if"]), "invalid_if is invalid")
         all_sources = list(primary_sources) + list(secondary_sources)
+        _require(len(all_sources) >= 2, "at least two distinct evidence sources are required")
         _require(len(all_sources) <= MAX_SOURCES_FETCHED, "too many sources")
         _require(len(set(all_sources)) == len(all_sources), "source URLs must be unique")
         harmful_terms = ("assassinat", "murder of", "death of", "kill ")
@@ -303,10 +304,7 @@ class PravaxResolver(gl.Contract):
         _require(amount > u256(0), "stake must be positive")
 
         holder = str(gl.message.sender_address)
-        position["position_id"] = position_id
-        position["holder"] = holder
-        position["recorded_at"] = _now_iso()
-        position["amount"] = int(amount)
+        position = {"position_id": position_id, "outcome": position["outcome"], "amount": str(int(amount)), "holder": holder, "recorded_at": _now_iso()}
 
         existing = json.loads(self.positions[market_id]) if market_id in self.positions else []
         _require(all(p.get("position_id") != position_id for p in existing), "duplicate position_id")

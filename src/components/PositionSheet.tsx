@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { MarketRecord } from "@/lib/schemas/market";
 import { TransactionStatus, type TxState } from "./TransactionStatus";
+import { parseGen } from "@/lib/gen";
 
 export function PositionSheet({
   market,
@@ -11,13 +12,14 @@ export function PositionSheet({
   contractConfigured,
 }: {
   market: MarketRecord;
-  onSubmit: (outcome: string, amount: bigint) => Promise<void>;
+  onSubmit: (outcome: string, amount: bigint, display: string) => Promise<void>;
   walletConnected: boolean;
   contractConfigured: boolean;
 }) {
   const [outcome, setOutcome] = useState<"YES" | "NO">("YES");
-  const [amount, setAmount] = useState("10");
+  const [amount, setAmount] = useState("1");
   const [txState, setTxState] = useState<TxState>("idle");
+  const [error, setError] = useState<string | null>(null);
 
   if (market.state !== "OPEN") {
     return <p className="text-sm text-ink-muted">Positions can only be taken while the market is open.</p>;
@@ -28,10 +30,12 @@ export function PositionSheet({
   async function handleSubmit() {
     setTxState("signing");
     try {
-      await onSubmit(outcome, BigInt(amount));
+      const wei = parseGen(amount);
+      await onSubmit(outcome, wei, amount.trim());
       setTxState("finalized");
-    } catch {
+    } catch (err) {
       setTxState("failed");
+      setError(err instanceof Error ? err.message : "Position failed");
     }
   }
 
@@ -53,10 +57,10 @@ export function PositionSheet({
         ))}
       </div>
       <label className="block text-xs text-ink-muted">
-        GEN stake (wei)
+        GEN stake
         <input
-          type="number"
-          min={1}
+          type="text"
+          inputMode="decimal"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           className="mt-1 w-full rounded border border-border bg-canvas px-3 py-2 text-sm"
@@ -68,9 +72,9 @@ export function PositionSheet({
         onClick={handleSubmit}
         className="w-full rounded bg-ink px-3 py-2 text-sm font-semibold text-canvas disabled:opacity-40"
       >
-        {contractConfigured ? "Take position" : "Contract not deployed"}
+        {contractConfigured ? `Escrow ${amount || "0"} GEN on ${outcome}` : "Contract not deployed"}
       </button>
-      <TransactionStatus state={!walletConnected ? "wallet-required" : txState} />
+      <TransactionStatus state={!walletConnected ? "wallet-required" : txState} detail={error ?? undefined} />
       <p className="text-[11px] text-ink-faint">Your stake is held in contract escrow and settled by the final verdict.</p>
     </div>
   );

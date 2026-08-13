@@ -67,6 +67,10 @@ export const ResolutionConstitutionSchema = ResolutionConstitutionObject.superRe
       message: "Resolves after must not be before event deadline",
     });
   }
+  const sources = [...data.primary_sources, ...data.secondary_sources];
+  if (sources.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["secondary_sources"], message: "At least two distinct evidence sources are required." });
+  if (new Set(sources).size !== sources.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["secondary_sources"], message: "Evidence source URLs must be distinct." });
+  if (sources.length > 6) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["secondary_sources"], message: "At most six evidence sources are allowed." });
 });
 export type ResolutionConstitution = z.infer<typeof ResolutionConstitutionSchema>;
 
@@ -84,7 +88,7 @@ export type MarketRecord = z.infer<typeof MarketRecordSchema>;
 export const PositionSchema = z.object({
   position_id: z.string(),
   outcome: z.enum(["YES", "NO"]),
-  amount: z.number().int().positive(),
+  amount: z.string().regex(/^\d+$/),
   holder: z.string(),
   recorded_at: z.string(),
 });

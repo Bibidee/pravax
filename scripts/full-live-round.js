@@ -3,6 +3,7 @@
 const { createClient, createAccount } = require("genlayer-js");
 const { studionet } = require("genlayer-js/chains");
 const { TransactionStatus } = require("genlayer-js/types");
+const { parseUnits } = require("viem");
 
 const CONTRACT = "0x30bd9c57Aa4E28a071da4AaBF4B8c4293A96150D";
 const account = createAccount();
@@ -44,21 +45,21 @@ async function requireState(id, expected) {
     category: "OTHER", outcomes: ["YES", "NO"],
     close_at: iso(now + 120000), event_deadline: iso(now + 120000), resolve_after: iso(now + 130000),
     primary_sources: ["https://science.nasa.gov/solar-system/solar-system-facts/"],
-    secondary_sources: [],
+    secondary_sources: ["https://solarsystem.nasa.gov/solar-system/our-solar-system/overview/"],
     definition: "YES if the official NASA source describes the Sun as the center of the solar system; otherwise NO.",
     invalid_if: [], ambiguity_policy: "Return UNRESOLVED if evidence is unavailable or materially conflicting.",
   };
   await write("create_market", [id, JSON.stringify(market)]);
   await requireState(id, "OPEN");
-  await write("record_position", [`${id}-yes`, id, JSON.stringify({ outcome: "YES" })], 10n);
-  await write("record_position", [`${id}-no`, id, JSON.stringify({ outcome: "NO" })], 3n);
+  await write("record_position", [`${id}-yes`, id, JSON.stringify({ outcome: "YES" })], parseUnits("0.1", 18));
+  await write("record_position", [`${id}-no`, id, JSON.stringify({ outcome: "NO" })], parseUnits("0.05", 18));
   console.log("escrow", await read("get_escrow", [id]));
   console.log("positions", await read("get_positions", [id]));
   await sleep(135000);
   await write("lock_market", [id]);
   await requireState(id, "LOCKED");
   await write("resolve_market", [id]);
-  const resolved = await requireState(id, "CHALLENGE_WINDOW");
+  await requireState(id, "CHALLENGE_WINDOW");
   const verdict = JSON.parse(await read("get_resolution", [id])).verdict;
   const claimed = verdict === "YES" ? "NO" : "YES";
   await write("submit_challenge", [id, `${id}-challenge`, JSON.stringify({

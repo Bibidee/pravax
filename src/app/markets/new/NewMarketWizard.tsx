@@ -18,7 +18,7 @@ const EMPTY: ResolutionConstitution = {
   resolve_after: "",
   event_deadline: "",
   primary_sources: [""],
-  secondary_sources: [],
+  secondary_sources: [""],
   definition: "",
   invalid_if: [],
   ambiguity_policy: "",
@@ -100,7 +100,8 @@ export function NewMarketWizard() {
         <h2 className="font-display mb-4 text-2xl">{STEPS[step]}</h2>
 
         {step === 0 && (
-          <div className="space-y-3">
+            <div className="space-y-3">
+            <p className="rounded border border-border bg-canvas-raised p-3 text-xs text-ink-muted">At least two distinct evidence sources are required.</p>
             <textarea
               value={form.question}
               onChange={(e) => update("question", e.target.value)}

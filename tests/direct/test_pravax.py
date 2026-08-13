@@ -10,7 +10,7 @@ def market(close_at: str) -> dict:
         "event_deadline": "2026-12-01T00:00:00Z",
         "resolve_after": "2026-12-01T00:15:00Z",
         "primary_sources": ["https://example.com/primary"],
-        "secondary_sources": [],
+        "secondary_sources": ["https://example.com/secondary"],
         "definition": "A stable release is a public stable v2.0 release.",
         "invalid_if": [],
         "ambiguity_policy": "Return UNRESOLVED when evidence is insufficient.",

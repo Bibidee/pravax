@@ -39,7 +39,7 @@ def valid_market(**overrides) -> dict:
         "resolve_after": "2026-12-01T00:15:00Z",
         "event_deadline": "2026-12-01T00:00:00Z",
         "primary_sources": ["https://github.com/example/atlas/releases"],
-        "secondary_sources": [],
+        "secondary_sources": ["https://example.com/atlas-secondary"],
         "definition": "Release means a public stable v2.0 release, not alpha/beta/RC.",
         "invalid_if": ["repository becomes permanently inaccessible before close"],
         "ambiguity_policy": "Return UNRESOLVED when evidence is insufficient or materially conflicting.",
@@ -124,6 +124,19 @@ def test_create_market_rejects_impossible_source_policy():
         assert False
     except Exception as e:
         assert "primary source" in str(e)
+
+
+def test_create_market_requires_two_distinct_sources():
+    c = new_contract()
+    for market in (
+        valid_market(secondary_sources=[]),
+        valid_market(secondary_sources=["https://github.com/example/atlas/releases"]),
+    ):
+        try:
+            c.create_market("m" + str(len(c.markets)), json.dumps(market))
+            assert False
+        except Exception as e:
+            assert "source" in str(e)
 
 
 def test_create_market_rejects_invalid_timestamps_and_source_urls():
@@ -228,6 +241,9 @@ def test_cannot_resolve_market_not_locked():
 
 
 def _resolve_with(c, market_id, verdict_payload):
+    if verdict_payload.get("verdict") in ("YES", "NO") and not verdict_payload.get("evidence"):
+        verdict_payload = dict(verdict_payload)
+        verdict_payload["evidence"] = [{"url": "https://github.com/example/atlas/releases", "source_role": "PRIMARY", "claim": "locked source supports this verdict"}]
     conftest._FakeNondet.prompt_response = verdict_payload
     set_clock("2026-12-01T01:00:00Z")
     c.resolve_market(market_id)
@@ -301,7 +317,7 @@ def test_duplicate_resolution_prevented():
 def test_resolution_uses_only_the_stored_constitution_and_fixed_deadline():
     c = new_contract()
     market_id = create_and_lock(c)
-    conftest._FakeNondet.prompt_response = {"verdict": "YES", "confidence": 90, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"}
+    conftest._FakeNondet.prompt_response = {"verdict": "YES", "confidence": 90, "rule_interpretation": "x", "evidence": [{"url": "https://github.com/example/atlas/releases", "source_role": "PRIMARY", "claim": "x"}], "conflicts": [], "reasoning_summary": "x"}
     set_clock("2026-12-01T01:00:00Z")
     c.resolve_market(market_id)
     market = json.loads(c.get_market(market_id))
@@ -341,7 +357,7 @@ def test_challenge_lifecycle_and_review():
         "verdict": "YES",
         "confidence": 88,
         "rule_interpretation": "tag counts as stable release",
-        "evidence": [],
+        "evidence": [{"url": "https://github.com/example/atlas/releases/tag/v2.0.0", "source_role": "SECONDARY", "claim": "x"}],
         "conflicts": [],
         "reasoning_summary": "reviewed challenger evidence",
     }
@@ -406,7 +422,7 @@ def test_review_fetches_counter_evidence_and_opens_a_new_window():
     url = "https://example.com/evidence"
     c.submit_challenge(market_id, "ch1", json.dumps({"challenged_verdict": "NO", "claimed_verdict": "YES", "disputed_rule": "x", "explanation": "x", "evidence_urls": [url]}))
     conftest._FakeNondetWeb.responses[url] = "Counter evidence contents"
-    conftest._FakeNondet.prompt_response = {"verdict": "YES", "confidence": 88, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"}
+    conftest._FakeNondet.prompt_response = {"verdict": "YES", "confidence": 88, "rule_interpretation": "x", "evidence": [{"url": url, "source_role": "SECONDARY", "claim": "x"}], "conflicts": [], "reasoning_summary": "x"}
     c.review_challenge(market_id)
     assert "Counter evidence contents" in conftest._FakeNondet.last_task
     assert json.loads(c.get_market(market_id))["challenge_deadline"] == "2026-12-02T01:00:00Z"
@@ -486,7 +502,7 @@ def test_position_rejects_unknown_outcomes_and_client_supplied_amounts_are_ignor
         except Exception as e:
             assert "outcome" in str(e) or "positive" in str(e)
     c.record_position("payable", "m1", json.dumps({"outcome": "YES", "amount": False}))
-    assert json.loads(c.get_positions("m1"))[-1]["amount"] == conftest._FakeMessage.value
+    assert json.loads(c.get_positions("m1"))[-1]["amount"] == str(conftest._FakeMessage.value)
 
 
 def test_protocol_stats_track_lifecycle():
