@@ -101,14 +101,15 @@ async function write(
   account: `0x${string}`,
   provider: unknown,
   functionName: string,
-  args: string[] = []
+  args: string[] = [],
+  value: bigint = BigInt(0)
 ): Promise<`0x${string}`> {
   const client = getWriteClient(account, provider);
   const hash = await client.writeContract({
     address: requireAddress(),
     functionName,
     args,
-    value: BigInt(0),
+    value,
   });
 
   const isNondet = NONDET_METHODS.has(functionName);
@@ -150,8 +151,11 @@ export const pravax = {
   lockMarket: (account: `0x${string}`, provider: unknown, marketId: string) =>
     write(account, provider, "lock_market", [marketId]),
 
-  recordPosition: (account: `0x${string}`, provider: unknown, positionId: string, marketId: string, positionJson: string) =>
-    write(account, provider, "record_position", [positionId, marketId, positionJson]),
+  recordPosition: (account: `0x${string}`, provider: unknown, positionId: string, marketId: string, positionJson: string, value: bigint) =>
+    write(account, provider, "record_position", [positionId, marketId, positionJson], value),
+
+  claim: (account: `0x${string}`, provider: unknown, marketId: string) =>
+    write(account, provider, "claim", [marketId]),
 
   submitChallenge: (account: `0x${string}`, provider: unknown, marketId: string, challengeId: string, challengeJson: string) =>
     write(account, provider, "submit_challenge", [marketId, challengeId, challengeJson]),
@@ -171,6 +175,8 @@ export const pravax = {
   getResolution: (marketId: string) => read<string>("get_resolution", [marketId]),
   getChallenges: (marketId: string) => read<string>("get_challenges", [marketId]),
   getPositions: (marketId: string) => read<string>("get_positions", [marketId]),
+  getEscrow: (marketId: string) => read<string>("get_escrow", [marketId]),
+  getClaimable: (marketId: string, user: string) => read<string>("get_claimable", [marketId, user]),
   getUserMarkets: (user: string) => read<string>("get_user_markets", [user]),
   getMarketIds: (offset = 0, limit = 50) => read<string>("get_market_ids", [String(offset), String(limit)]),
   getProtocolStats: () => read<string>("get_protocol_stats", []),

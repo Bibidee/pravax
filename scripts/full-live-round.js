@@ -27,7 +27,7 @@ async function read(functionName, args = []) {
   const id = `live-round-${Math.floor(now / 1000)}`;
   const market = {
     question: "Does the official NASA website describe the Sun as the center of the solar system?",
-    category: "FACTUAL",
+    category: "OTHER",
     outcomes: ["YES", "NO"],
     close_at: iso(90),
     event_deadline: iso(90),

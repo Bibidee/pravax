@@ -71,7 +71,7 @@ export function MarketTabs({ view }: { view: MarketView }) {
       {tab === "MARKET" && (
         <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
           <div className="space-y-6">
-            {total > 0 ? <div className="space-y-1 text-sm text-ink-muted"><p>Test position share — YES: {((yes / total) * 100).toFixed(0)}%</p><p>Test position share — NO: {((no / total) * 100).toFixed(0)}%</p></div> : <p className="text-sm text-ink-muted">No test positions yet.</p>}
+            {total > 0 ? <div className="space-y-1 text-sm text-ink-muted"><p>Escrow share — YES: {((yes / total) * 100).toFixed(0)}%</p><p>Escrow share — NO: {((no / total) * 100).toFixed(0)}%</p></div> : <p className="text-sm text-ink-muted">No positions yet.</p>}
             <div className="text-sm text-ink-muted">
               <p>Creator: {market.creator}</p>
               <p>Created {formatUtc(market.created_at)}</p>
@@ -101,7 +101,8 @@ export function MarketTabs({ view }: { view: MarketView }) {
                 (window as unknown as { ethereum: unknown }).ethereum,
                 `${id}-${Date.now()}`,
                 id,
-                JSON.stringify({ outcome, amount })
+                JSON.stringify({ outcome }),
+                amount
               );
               router.refresh();
             }}

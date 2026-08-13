@@ -19,6 +19,10 @@ def set_sender(addr: str) -> None:
     conftest._FakeMessage.sender_address = addr
 
 
+def set_value(value: int) -> None:
+    conftest._FakeMessage.value = value
+
+
 def set_clock(iso: str) -> None:
     conftest.set_clock(iso)
 
@@ -46,6 +50,7 @@ def valid_market(**overrides) -> dict:
 
 def new_contract():
     set_sender(CREATOR)
+    set_value(25)
     set_clock("2026-01-01T00:00:00Z")
     return PravaxResolver()
 
@@ -463,22 +468,25 @@ def test_record_position_while_open():
     c = new_contract()
     c.create_market("m1", json.dumps(valid_market()))
     set_sender(PARTICIPANT)
+    set_value(25)
     c.record_position("p1", "m1", json.dumps({"outcome": "YES", "amount": 25}))
     positions = json.loads(c.get_positions("m1"))
     assert len(positions) == 1
     assert positions[0]["holder"].lower() == PARTICIPANT.lower()
 
 
-def test_position_rejects_unknown_outcomes_and_non_finite_amounts():
+def test_position_rejects_unknown_outcomes_and_client_supplied_amounts_are_ignored():
     c = new_contract()
     c.create_market("m1", json.dumps(valid_market()))
     set_sender(PARTICIPANT)
-    for payload in ({"outcome": "MAYBE", "amount": 1}, {"outcome": "YES", "amount": True}):
+    for payload in ({"outcome": "MAYBE", "amount": 1},):
         try:
             c.record_position("p" + str(len(c.get_positions("m1"))), "m1", json.dumps(payload))
             assert False
         except Exception as e:
             assert "outcome" in str(e) or "positive" in str(e)
+    c.record_position("payable", "m1", json.dumps({"outcome": "YES", "amount": False}))
+    assert json.loads(c.get_positions("m1"))[-1]["amount"] == conftest._FakeMessage.value
 
 
 def test_protocol_stats_track_lifecycle():
@@ -493,3 +501,34 @@ def test_protocol_stats_track_lifecycle():
     assert stats["markets_locked"] == 1
     assert stats["markets_resolved"] == 1
     assert stats["markets_finalized"] == 1
+
+
+def test_payable_stakes_and_yes_claim_formula():
+    c = new_contract()
+    c.create_market("m1", json.dumps(valid_market()))
+    set_sender(PARTICIPANT); set_value(30)
+    c.record_position("yes", "m1", json.dumps({"outcome": "YES"}))
+    set_sender(CHALLENGER); set_value(10)
+    c.record_position("no", "m1", json.dumps({"outcome": "NO"}))
+    assert json.loads(c.get_escrow("m1"))["total_escrow"] == "40"
+    market_id = "m1"; set_clock("2026-11-25T00:00:00Z"); c.lock_market(market_id)
+    _resolve_with(c, market_id, {"verdict": "YES", "confidence": 90, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
+    c.market_state[market_id] = "FINAL"; c.resolved_flag[market_id] = "1"
+    set_sender(PARTICIPANT)
+    assert c.get_claimable(market_id, PARTICIPANT) == "40"
+
+
+def test_invalid_refunds_and_zero_value_rejected():
+    c = new_contract()
+    c.create_market("m1", json.dumps(valid_market()))
+    set_sender(PARTICIPANT); set_value(0)
+    try:
+        c.record_position("zero", "m1", json.dumps({"outcome": "YES"}))
+        assert False
+    except Exception as exc:
+        assert "stake" in str(exc)
+    set_value(25); c.record_position("yes", "m1", json.dumps({"outcome": "YES"}))
+    market_id = "m1"; set_clock("2026-11-25T00:00:00Z"); c.lock_market(market_id)
+    _resolve_with(c, market_id, {"verdict": "INVALID", "confidence": 90, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
+    c.market_state[market_id] = "FINAL"; c.resolved_flag[market_id] = "1"
+    assert c.get_claimable(market_id, PARTICIPANT) == "25"

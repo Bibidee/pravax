@@ -11,12 +11,12 @@ export function PositionSheet({
   contractConfigured,
 }: {
   market: MarketRecord;
-  onSubmit: (outcome: string, amount: number) => Promise<void>;
+  onSubmit: (outcome: string, amount: bigint) => Promise<void>;
   walletConnected: boolean;
   contractConfigured: boolean;
 }) {
   const [outcome, setOutcome] = useState<"YES" | "NO">("YES");
-  const [amount, setAmount] = useState(10);
+  const [amount, setAmount] = useState("10");
   const [txState, setTxState] = useState<TxState>("idle");
 
   if (market.state !== "OPEN") {
@@ -28,7 +28,7 @@ export function PositionSheet({
   async function handleSubmit() {
     setTxState("signing");
     try {
-      await onSubmit(outcome, amount);
+      await onSubmit(outcome, BigInt(amount));
       setTxState("finalized");
     } catch {
       setTxState("failed");
@@ -37,7 +37,7 @@ export function PositionSheet({
 
   return (
     <div className="space-y-3 rounded-lg border border-border bg-canvas-raised p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Take a position (test credits)</p>
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Take a position (GEN escrow)</p>
       <div className="flex gap-2">
         {market.outcomes.map((o) => (
           <button
@@ -53,12 +53,12 @@ export function PositionSheet({
         ))}
       </div>
       <label className="block text-xs text-ink-muted">
-        Test credits
+        GEN stake (wei)
         <input
           type="number"
           min={1}
           value={amount}
-          onChange={(e) => setAmount(Number(e.target.value))}
+          onChange={(e) => setAmount(e.target.value)}
           className="mt-1 w-full rounded border border-border bg-canvas px-3 py-2 text-sm"
         />
       </label>
@@ -71,7 +71,7 @@ export function PositionSheet({
         {contractConfigured ? "Take position" : "Contract not deployed"}
       </button>
       <TransactionStatus state={!walletConnected ? "wallet-required" : txState} />
-      <p className="text-[11px] text-ink-faint">Test credits only. This is not real-money wagering.</p>
+      <p className="text-[11px] text-ink-faint">Your stake is held in contract escrow and settled by the final verdict.</p>
     </div>
   );
 }

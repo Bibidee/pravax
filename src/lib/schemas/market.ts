@@ -32,9 +32,9 @@ const ResolutionConstitutionObject = z.object({
   question: z.string().min(12, "Question must be specific enough to resolve unambiguously").max(2000),
   category: MarketCategorySchema.default("OTHER"),
   outcomes: z.tuple([z.literal("YES"), z.literal("NO")]),
-  close_at: z.string().min(1, "Close at is required").datetime({ offset: true }).or(z.string().min(1, "Close at is required")),
-  resolve_after: z.string().min(1, "Resolves after is required").datetime({ offset: true }).or(z.string().min(1, "Resolves after is required")),
-  event_deadline: z.string().min(1, "Event deadline is required").datetime({ offset: true }).or(z.string().min(1, "Event deadline is required")),
+  close_at: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, "Must be canonical UTC seconds"),
+  resolve_after: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, "Must be canonical UTC seconds"),
+  event_deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, "Must be canonical UTC seconds"),
   primary_sources: z.array(httpUrl).min(1, "At least one primary source is required"),
   secondary_sources: z.array(httpUrl).default([]),
   definition: z.string().min(10, "Define exactly what counts as a qualifying event").max(2000),
@@ -84,7 +84,7 @@ export type MarketRecord = z.infer<typeof MarketRecordSchema>;
 export const PositionSchema = z.object({
   position_id: z.string(),
   outcome: z.enum(["YES", "NO"]),
-  amount: z.number().positive(),
+  amount: z.number().int().positive(),
   holder: z.string(),
   recorded_at: z.string(),
 });

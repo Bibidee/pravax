@@ -6,6 +6,7 @@ import { ResolutionConstitutionSchema, type ResolutionConstitution } from "@/lib
 import { TransactionStatus, type TxState } from "@/components/TransactionStatus";
 import { useWallet } from "@/lib/wallet/useWallet";
 import { pravax } from "@/lib/genlayer/contracts/pravax";
+import { canonicalUtcSeconds } from "@/lib/time";
 
 const STEPS = ["QUESTION", "OUTCOMES", "TIME", "SOURCES", "RESOLUTION RULES"] as const;
 
@@ -138,7 +139,7 @@ export function NewMarketWizard() {
               <input
                 type="datetime-local"
                 value={toDatetimeLocalValue(form.close_at)}
-                onChange={(e) => update("close_at", e.target.value ? new Date(e.target.value).toISOString() : "")}
+                onChange={(e) => update("close_at", e.target.value ? canonicalUtcSeconds(e.target.value) : "")}
                 className="mt-1 w-full rounded border border-border bg-canvas-raised px-3 py-2 text-sm"
               />
             </label>
@@ -147,7 +148,7 @@ export function NewMarketWizard() {
               <input
                 type="datetime-local"
                 value={toDatetimeLocalValue(form.event_deadline)}
-                onChange={(e) => update("event_deadline", e.target.value ? new Date(e.target.value).toISOString() : "")}
+                onChange={(e) => update("event_deadline", e.target.value ? canonicalUtcSeconds(e.target.value) : "")}
                 className="mt-1 w-full rounded border border-border bg-canvas-raised px-3 py-2 text-sm"
               />
             </label>
@@ -156,7 +157,7 @@ export function NewMarketWizard() {
               <input
                 type="datetime-local"
                 value={toDatetimeLocalValue(form.resolve_after)}
-                onChange={(e) => update("resolve_after", e.target.value ? new Date(e.target.value).toISOString() : "")}
+                onChange={(e) => update("resolve_after", e.target.value ? canonicalUtcSeconds(e.target.value) : "")}
                 className="mt-1 w-full rounded border border-border bg-canvas-raised px-3 py-2 text-sm"
               />
             </label>

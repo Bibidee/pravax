@@ -18,6 +18,7 @@ import datetime as _real_datetime_module
 
 class _FakeMessage:
     sender_address = "0xCREATOR000000000000000000000000000001"
+    value = 25
 
 
 class _FakeNondetWeb:
@@ -54,9 +55,44 @@ class _FakeEqPrinciple:
 
 
 class _PublicNamespace:
+    class _Write:
+        def __call__(self, fn):
+            return fn
+
+        @staticmethod
+        def payable(fn):
+            return fn
+
+    write = _Write()
+
     @staticmethod
-    def write(fn):
+    def view(fn):
         return fn
+
+
+class _FakeEvm:
+    @staticmethod
+    def contract_interface(cls):
+        return cls
+
+
+class _FakeEOA:
+    transfers = []
+
+    def __init__(self, address):
+        self.address = address
+
+    def emit_transfer(self, value):
+        self.transfers.append((str(self.address), int(value)))
+
+
+class _FakeAddress(str):
+    pass
+
+
+class _FakeVm:
+    class UserError(Exception):
+        pass
 
     @staticmethod
     def view(fn):
@@ -94,13 +130,18 @@ gl_module = types.ModuleType("genlayer")
 gl_ns = types.SimpleNamespace(
     Contract=_FakeContract,
     public=_PublicNamespace,
+    evm=_FakeEvm,
+    vm=_FakeVm,
     message=_FakeMessage,
     nondet=_FakeNondet,
     eq_principle=_FakeEqPrinciple,
 )
 gl_module.gl = gl_ns
 gl_module.TreeMap = _FakeTreeMap
-gl_module.__all__ = ["gl", "TreeMap"]
+gl_module.u256 = int
+gl_module.Address = _FakeAddress
+gl_module._EOA = _FakeEOA
+gl_module.__all__ = ["gl", "TreeMap", "u256", "Address"]
 
 sys.modules["genlayer"] = gl_module
 

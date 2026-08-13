@@ -28,6 +28,15 @@ MAX_SOURCES_FETCHED = 6
 ERR_EXPECTED = "EXPECTED"
 ERR_EXTERNAL = "EXTERNAL"
 ERR_LLM = "LLM_ERROR"
+CATEGORIES = ("SOFTWARE", "SPORTS", "ANNOUNCEMENT", "OTHER")
+
+
+@gl.evm.contract_interface
+class _EOA:
+    class View:
+        pass
+    class Write:
+        pass
 
 VERDICTS = ("YES", "NO", "INVALID", "UNRESOLVED")
 
@@ -63,7 +72,7 @@ def _add_seconds_iso(iso_ts: str, seconds: int) -> str:
 
 
 def _fail(prefix: str, message: str) -> None:
-    raise Exception(f"{prefix}: {message}")
+    raise gl.vm.UserError(f"[{prefix}] {message}")
 
 
 def _require(condition: bool, message: str, prefix: str = ERR_EXPECTED) -> None:
@@ -131,11 +140,12 @@ def _validate_verdict_shape(parsed: dict, retrieved: dict) -> None:
     _require(isinstance(parsed["evidence"], list) and len(parsed["evidence"]) <= MAX_EVIDENCE, "evidence is invalid", ERR_LLM)
     for item in parsed["evidence"]:
         _require(
-            isinstance(item, dict)
-            and {"url", "source_role", "claim", "published_at", "event_time"}.issubset(item.keys()),
+            isinstance(item, dict) and {"url", "source_role", "claim"}.issubset(item.keys()),
             "evidence item is invalid",
             ERR_LLM,
         )
+        item["published_at"] = item.get("published_at")
+        item["event_time"] = item.get("event_time")
         _require(item["url"] in retrieved and item["source_role"] == retrieved[item["url"]], "evidence provenance is invalid", ERR_LLM)
         _require(isinstance(item["claim"], str) and 0 < len(item["claim"]) <= MAX_TEXT, "evidence claim is invalid", ERR_LLM)
         for field in ("published_at", "event_time"):
@@ -155,6 +165,9 @@ class PravaxResolver(gl.Contract):
     resolutions: TreeMap[str, str]
     challenges: TreeMap[str, str]  # market_id -> JSON array of challenge records
     positions: TreeMap[str, str]  # market_id -> JSON array of position records
+    stakes: TreeMap[str, str]  # market_id:lowercase-user:outcome -> decimal u256
+    escrow: TreeMap[str, str]  # market_id -> deterministic accounting JSON
+    claims: TreeMap[str, str]  # market_id:lowercase-user -> "1"
     user_markets: TreeMap[str, str]  # lowercase address -> JSON array of market ids
     market_ids: TreeMap[str, str]  # numeric index -> market id
     market_state: TreeMap[str, str]  # market_id -> state machine value
@@ -188,7 +201,20 @@ class PravaxResolver(gl.Contract):
             existing.append(market_id)
         self.user_markets[key] = json.dumps(existing)
 
+    def _stake_key(self, market_id: str, user: str, outcome: str) -> str:
+        return market_id + ":" + user.lower() + ":" + outcome
+
+    def _claim_key(self, market_id: str, user: str) -> str:
+        return market_id + ":" + user.lower()
+
+    def _accounting(self, market_id: str) -> dict:
+        return json.loads(self.escrow.get(market_id, '{"yes_total":"0","no_total":"0","total_escrow":"0","paid_or_refunded":"0"}'))
+
+    def _set_accounting(self, market_id: str, accounting: dict) -> None:
+        self.escrow[market_id] = json.dumps(accounting, sort_keys=True)
+
     def _validate_constitution(self, market: dict) -> None:
+        _require(market.get("category", "OTHER") in CATEGORIES, "category is invalid")
         _require(isinstance(market.get("question"), str) and 0 < len(market["question"]) <= MAX_TEXT, "question is required and bounded")
         outcomes = market.get("outcomes")
         _require(outcomes == ["YES", "NO"], 'outcomes must be exactly ["YES", "NO"]')
@@ -241,6 +267,7 @@ class PravaxResolver(gl.Contract):
 
         self.markets[market_id] = json.dumps(market, sort_keys=True)
         self.market_state[market_id] = "OPEN"
+        self._set_accounting(market_id, {"yes_total": "0", "no_total": "0", "total_escrow": "0", "paid_or_refunded": "0"})
         self.market_ids[str(len(self.market_ids))] = market_id
         self._track_user_market(creator, market_id)
         self._bump_stat("markets_created")
@@ -261,7 +288,7 @@ class PravaxResolver(gl.Contract):
         self.market_state[market_id] = "LOCKED"
         self._bump_stat("markets_locked")
 
-    @gl.public.write
+    @gl.public.write.payable
     def record_position(self, position_id: str, market_id: str, position_json: str) -> None:
         _require(0 < len(position_id) <= MAX_ID_LENGTH, "position_id is required and bounded")
         _require(market_id in self.markets, "unknown market_id")
@@ -272,22 +299,60 @@ class PravaxResolver(gl.Contract):
         market = json.loads(self.markets[market_id])
         _require(_now_iso() < market["close_at"], "position window has closed")
         _require(position.get("outcome") in market["outcomes"], "outcome must be one of the market outcomes")
-        amount = position.get("amount")
-        _require(
-            isinstance(amount, (int, float)) and not isinstance(amount, bool) and amount > 0,
-            "amount must be a positive number",
-        )
+        amount = u256(gl.message.value)
+        _require(amount > u256(0), "stake must be positive")
 
         holder = str(gl.message.sender_address)
         position["position_id"] = position_id
         position["holder"] = holder
         position["recorded_at"] = _now_iso()
+        position["amount"] = int(amount)
 
         existing = json.loads(self.positions[market_id]) if market_id in self.positions else []
         _require(all(p.get("position_id") != position_id for p in existing), "duplicate position_id")
         existing.append(position)
         self.positions[market_id] = json.dumps(existing)
+        stake_key = self._stake_key(market_id, holder, position["outcome"])
+        self.stakes[stake_key] = str(int(self.stakes.get(stake_key, "0")) + int(amount))
+        accounting = self._accounting(market_id)
+        pool_key = "yes_total" if position["outcome"] == "YES" else "no_total"
+        accounting[pool_key] = str(int(accounting[pool_key]) + int(amount))
+        accounting["total_escrow"] = str(int(accounting["total_escrow"]) + int(amount))
+        self._set_accounting(market_id, accounting)
         self._track_user_market(holder, market_id)
+
+    @gl.public.write
+    def claim(self, market_id: str) -> None:
+        _require(market_id in self.markets, "unknown market_id")
+        _require(self.market_state.get(market_id, "") == "FINAL", "market must be FINAL before claiming")
+        caller = str(gl.message.sender_address)
+        claim_key = self._claim_key(market_id, caller)
+        _require(claim_key not in self.claims, "claim already made")
+        _require(market_id in self.resolutions, "final resolution is missing")
+        verdict = json.loads(self.resolutions[market_id]).get("verdict")
+        accounting = self._accounting(market_id)
+        yes_stake = int(self.stakes.get(self._stake_key(market_id, caller, "YES"), "0"))
+        no_stake = int(self.stakes.get(self._stake_key(market_id, caller, "NO"), "0"))
+        principal = yes_stake + no_stake
+        _require(principal > 0, "caller has no stake")
+        total = int(accounting["total_escrow"])
+        yes_total = int(accounting["yes_total"])
+        no_total = int(accounting["no_total"])
+        if verdict in ("INVALID", "UNRESOLVED") or (verdict == "YES" and yes_total == 0) or (verdict == "NO" and no_total == 0):
+            payout = principal
+        elif verdict == "YES":
+            payout = (yes_stake * total) // yes_total
+        elif verdict == "NO":
+            payout = (no_stake * total) // no_total
+        else:
+            _fail(ERR_EXPECTED, "final verdict is invalid")
+            return
+        _require(payout > 0, "caller has no claimable amount")
+        # Effects before interaction: prevents a second claim if the transfer re-enters.
+        self.claims[claim_key] = "1"
+        accounting["paid_or_refunded"] = str(int(accounting["paid_or_refunded"]) + payout)
+        self._set_accounting(market_id, accounting)
+        _EOA(Address(caller)).emit_transfer(value=u256(payout))
 
     @gl.public.write
     def submit_challenge(self, market_id: str, challenge_id: str, challenge_json: str) -> None:
@@ -506,6 +571,35 @@ class PravaxResolver(gl.Contract):
     @gl.public.view
     def get_positions(self, market_id: str) -> str:
         return self.positions.get(market_id, "[]")
+
+    @gl.public.view
+    def get_escrow(self, market_id: str) -> str:
+        _require(market_id in self.markets, "unknown market_id")
+        return json.dumps(self._accounting(market_id), sort_keys=True)
+
+    @gl.public.view
+    def get_claimable(self, market_id: str, user: str) -> str:
+        if market_id not in self.markets or self.market_state.get(market_id, "") != "FINAL":
+            return "0"
+        if self._claim_key(market_id, user) in self.claims or market_id not in self.resolutions:
+            return "0"
+        accounting = self._accounting(market_id)
+        yes_stake = int(self.stakes.get(self._stake_key(market_id, user, "YES"), "0"))
+        no_stake = int(self.stakes.get(self._stake_key(market_id, user, "NO"), "0"))
+        principal = yes_stake + no_stake
+        if principal == 0:
+            return "0"
+        verdict = json.loads(self.resolutions[market_id]).get("verdict")
+        total = int(accounting["total_escrow"])
+        yes_total = int(accounting["yes_total"])
+        no_total = int(accounting["no_total"])
+        if verdict in ("INVALID", "UNRESOLVED") or (verdict == "YES" and yes_total == 0) or (verdict == "NO" and no_total == 0):
+            return str(principal)
+        if verdict == "YES":
+            return str((yes_stake * total) // yes_total)
+        if verdict == "NO":
+            return str((no_stake * total) // no_total)
+        return "0"
 
     @gl.public.view
     def get_user_markets(self, user: str) -> str:
