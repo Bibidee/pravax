@@ -34,7 +34,7 @@ export function ChallengeClient({ view }: { view: MarketView }) {
     );
   }
 
-  async function runLifecycleAction(action: "review" | "finalize") {
+  async function runLifecycleAction(action: "review" | "finalize" | "expire") {
     setError(null);
     if (!address) {
       await connect();
@@ -44,8 +44,10 @@ export function ChallengeClient({ view }: { view: MarketView }) {
     try {
       if (action === "review") {
         await pravax.reviewChallenge(address, (window as unknown as { ethereum: unknown }).ethereum, view.id);
-      } else {
+      } else if (action === "finalize") {
         await pravax.finalizeResolution(address, (window as unknown as { ethereum: unknown }).ethereum, view.id);
+      } else {
+        await pravax.expireChallenge(address, (window as unknown as { ethereum: unknown }).ethereum, view.id);
       }
       setState("finalized");
       router.refresh();
@@ -62,12 +64,13 @@ export function ChallengeClient({ view }: { view: MarketView }) {
   }
 
   if (view.market.state === "CHALLENGED") {
+    const expired = Boolean(view.market.challenge_deadline && isPast(new Date(view.market.challenge_deadline)));
     return (
       <div className="max-w-xl space-y-4 rounded-lg border border-border bg-canvas-raised p-6">
         <VerdictPanel resolution={view.resolution} provisional />
-        <p className="text-sm text-ink-muted">A challenge is on record. Anyone may trigger an independent evidence review.</p>
-        <button type="button" onClick={() => runLifecycleAction("review")} className="rounded bg-ink px-4 py-2 text-sm font-semibold text-canvas">
-          {address ? "Review challenge" : "Connect wallet to review"}
+        <p className="text-sm text-ink-muted">{expired ? "The review deadline passed. Anyone may settle this disputed market as UNRESOLVED so stakers can recover principal." : "A challenge is on record. Anyone may trigger an independent evidence review."}</p>
+        <button type="button" onClick={() => runLifecycleAction(expired ? "expire" : "review")} className="rounded bg-ink px-4 py-2 text-sm font-semibold text-canvas">
+          {address ? expired ? "Recover funds" : "Review challenge" : "Connect wallet"}
         </button>
         <TransactionStatus state={state} detail={error ?? undefined} />
       </div>

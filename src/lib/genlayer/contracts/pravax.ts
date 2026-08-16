@@ -163,6 +163,9 @@ export const pravax = {
   finalizeResolution: (account: `0x${string}`, provider: unknown, marketId: string) =>
     write(account, provider, "finalize_resolution", [marketId]),
 
+  expireChallenge: (account: `0x${string}`, provider: unknown, marketId: string) =>
+    write(account, provider, "expire_challenge", [marketId]),
+
   // ---- non-deterministic resolution ----
   resolveMarket: (account: `0x${string}`, provider: unknown, marketId: string) =>
     write(account, provider, "resolve_market", [marketId]),

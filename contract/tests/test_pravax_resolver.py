@@ -548,3 +548,45 @@ def test_invalid_refunds_and_zero_value_rejected():
     _resolve_with(c, market_id, {"verdict": "INVALID", "confidence": 90, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
     c.market_state[market_id] = "FINAL"; c.resolved_flag[market_id] = "1"
     assert c.get_claimable(market_id, PARTICIPANT) == "25"
+
+
+def test_claim_pays_winner_once_and_tracks_transfer():
+    pravax_resolver._EOA = conftest._FakeEOA
+    c = new_contract(); c.create_market("m1", json.dumps(valid_market()))
+    set_sender(PARTICIPANT); set_value(30); c.record_position("yes", "m1", json.dumps({"outcome": "YES"}))
+    set_sender(CHALLENGER); set_value(10); c.record_position("no", "m1", json.dumps({"outcome": "NO"}))
+    set_clock("2026-11-25T00:00:00Z"); c.lock_market("m1")
+    _resolve_with(c, "m1", {"verdict": "YES", "confidence": 90, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
+    c.market_state["m1"] = "FINAL"; c.resolved_flag["m1"] = "1"
+    conftest._FakeEOA.transfers.clear(); set_sender(PARTICIPANT); c.claim("m1")
+    assert conftest._FakeEOA.transfers[-1] == (PARTICIPANT, 40)
+    assert c.get_claimable("m1", PARTICIPANT) == "0"
+    try:
+        c.claim("m1"); assert False
+    except Exception as exc:
+        assert "already made" in str(exc)
+
+
+def test_unresolved_refunds_each_staker_once():
+    pravax_resolver._EOA = conftest._FakeEOA
+    c = new_contract(); c.create_market("m1", json.dumps(valid_market()))
+    set_sender(PARTICIPANT); set_value(30); c.record_position("yes", "m1", json.dumps({"outcome": "YES"}))
+    set_sender(CHALLENGER); set_value(10); c.record_position("no", "m1", json.dumps({"outcome": "NO"}))
+    set_clock("2026-11-25T00:00:00Z"); c.lock_market("m1")
+    _resolve_with(c, "m1", {"verdict": "UNRESOLVED", "confidence": 0, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
+    c.market_state["m1"] = "FINAL"; c.resolved_flag["m1"] = "1"; conftest._FakeEOA.transfers.clear()
+    set_sender(PARTICIPANT); c.claim("m1"); set_sender(CHALLENGER); c.claim("m1")
+    assert conftest._FakeEOA.transfers[-2:] == [(PARTICIPANT, 30), (CHALLENGER, 10)]
+    assert json.loads(c.get_escrow("m1"))["paid_or_refunded"] == "40"
+
+
+def test_expired_unreviewed_challenge_refunds_stakers():
+    c = new_contract(); market_id = "m1"; c.create_market(market_id, json.dumps(valid_market()))
+    set_sender(PARTICIPANT); set_value(25); c.record_position("yes", market_id, json.dumps({"outcome": "YES"}))
+    set_clock("2026-11-25T00:00:00Z"); c.lock_market(market_id)
+    _resolve_with(c, market_id, {"verdict": "YES", "confidence": 90, "rule_interpretation": "x", "evidence": [], "conflicts": [], "reasoning_summary": "x"})
+    set_sender(CHALLENGER); c.submit_challenge(market_id, "ch1", json.dumps({"challenged_verdict": "YES", "claimed_verdict": "NO", "disputed_rule": "x", "explanation": "x", "evidence_urls": ["https://example.com/evidence"]}))
+    deadline = json.loads(c.get_market(market_id))["challenge_deadline"]; set_clock(deadline); c.expire_challenge(market_id)
+    assert json.loads(c.get_market(market_id))["state"] == "FINAL"
+    assert json.loads(c.get_resolution(market_id))["verdict"] == "UNRESOLVED"
+    set_sender(PARTICIPANT); assert c.get_claimable(market_id, PARTICIPANT) == "25"

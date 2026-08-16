@@ -79,6 +79,9 @@ lock_market(market_id) -> None
 record_position(position_id, market_id, position_json) -> None
 submit_challenge(market_id, challenge_id, challenge_json) -> None
 finalize_resolution(market_id) -> None
+expire_challenge(market_id) -> None
+get_claimable(market_id, user) -> str
+claim(market_id) -> None
 
 get_market(market_id) -> str
 get_resolution(market_id) -> str
@@ -136,6 +139,18 @@ authoritative evidence on its own.
 3. `review_challenge` runs an independent second GenLayer review with the original constitution,
    provisional verdict, original evidence, and the challenger's packet.
 4. `finalize_resolution` is permissionless once the challenge window has closed.
+5. If a challenge is never reviewed, anyone may call `expire_challenge` after its review
+   deadline. The market finalizes as `UNRESOLVED`, so every staker can recover their principal
+   through `get_claimable` and `claim`; a free, unreviewed challenge cannot lock escrow forever.
+
+### Settlement
+
+After a market is final, the app displays each connected wallet's entitlement and wires the
+**Claim settlement** action to `get_claimable` / `claim`.
+
+- A final `YES` or `NO` market pays its full escrow pool pro rata to positions on the winning side.
+- `UNRESOLVED` and `INVALID` markets refund every position's principal.
+- Claims are tracked per position and a second claim is rejected by the contract.
 
 ## Local setup
 
@@ -194,37 +209,39 @@ genlayer schema <deployed-address>   # verify the ABI matches src/lib/genlayer/c
 `PravaxResolver` is deployed on **studionet** at:
 
 ```
-0x30bd9c57Aa4E28a071da4AaBF4B8c4293A96150D
+0x0883d77d7cE94A87F7d41165E2329A67dFcA8Fc9
 ```
 
-The current contract was deployed from the unlocked `faultline-dev` Studionet CLI account and independently
-verified with a live `get_protocol_stats` read and schema query before being wired in.
+This is the current `PravaxResolver` deployment, created from an unlocked Studionet CLI account
+and verified through live reads and a complete settlement round.
 
-Deployment proof: git commit `ba767c4`; source SHA-256
-`FBBEA0F6EE7D351D8D0334A3B00141F94BD80AD2BCF379D02B3479DD28CA5A7C`; network `studionet`;
-transaction `0xed39280d63cd87f6e62b6827d602b36c03595e6954495c0424e77613eb9590a0`.
+Deployment proof: source SHA-256
+`7A5112D84310C215287433F3BEBEE7D775C9185DA00E71A15C2806AE67C25718`; network `studionet`;
+deployment transaction
+`0x37db4992b993ee11f05ddc668be90562f99e0bf9f3d561a8e843d392406095d5`.
 
 ```js
 const client = createClient({ chain: studionet });
 await client.readContract({
-  address: "0x30bd9c57Aa4E28a071da4AaBF4B8c4293A96150D",
+  address: "0x0883d77d7cE94A87F7d41165E2329A67dFcA8Fc9",
   functionName: "get_protocol_stats",
   args: [],
 });
-// -> {"markets_created":0,"markets_locked":0,"markets_resolved":0,"markets_finalized":0,"challenges_filed":0}
+// -> live protocol statistics for this deployment
 ```
 
-That response matches `PravaxResolver.__init__`'s exact initial stats shape, confirming this is a
-live instance of this contract responding on studionet, not a fabricated address.
+The production frontend is deployed at [the-pravax.vercel.app](https://the-pravax.vercel.app/).
+Set `NEXT_PUBLIC_PRAVAX_CONTRACT_ADDRESS` in the Vercel project environment to the address above
+when deploying a frontend build.
 
 `NEXT_PUBLIC_GENLAYER_NETWORK=studionet` and `NEXT_PUBLIC_PRAVAX_CONTRACT_ADDRESS` are set in
 `.env.local` (and mirrored in `.env.example`). The frontend now reads real contract state via
 `pravax.isConfigured()` returning `true`; the UI renders only schema-validated on-chain markets.
 
-No market has been created against this deployment yet from this session — `markets_created` is
-`0` as shown above. Creating one requires a connected wallet with a funded studionet account (get
-one via the standard studionet flow, since studionet is gasless) exercising the `/markets/new`
-composer.
+A complete live round was verified on market `settlement-round-1786863943`: market creation,
+YES/NO positions, lock, AI resolution, challenge, independent review, finalization, winner payout,
+zero loser entitlement, and duplicate-claim rejection. The 0.15 GEN escrow was paid to the winning
+YES position; the duplicate claim was rejected with `EXPECTED: claim already made`.
 
 ## Testing
 
@@ -232,12 +249,13 @@ composer.
 SDK loaded from the pinned runner, not a stub): `{"ok": true}` — 0 lint errors, 0 validation
 errors, one informational note about a newer runner hash being available upstream.
 
-**Contract logic tests** (`contract/tests/test_pravax_resolver.py`, 24 tests, all passing):
+**Contract logic tests** (`contract/tests/test_pravax_resolver.py`, 38 tests, all passing):
 creation validation, rejecting malformed JSON / empty outcomes / missing deadlines / impossible
 source policy / harmful framing, unauthorized lock rejection, cannot-resolve-before-window,
 YES/NO/UNRESOLVED/INVALID verdicts, duplicate-resolution prevention, full
-challenge → review → finalize lifecycle, duplicate finalization prevention, and protocol stats
-tracking.
+challenge → review → finalize lifecycle, duplicate finalization prevention, timestamp and input
+bounds, evidence-budget coverage, payout/refund accounting, duplicate-claim prevention, challenge
+timeout recovery, and protocol stats tracking.
 
 These run against a lightweight GenVM stub (`contract/tests/conftest.py`) rather than a live
 GenLayer node, so they verify the contract's deterministic logic and state machine, not real
@@ -288,14 +306,9 @@ against the real SDK and downloaded GenVM runner surfaced concrete errors, all n
 
 ## Known limitations
 
-- **Deployment was not performed from this environment** — the studionet address was supplied
-  directly and independently verified with a live read call (see above), but this session never
-  had a funded/signing account itself, so the deploy transaction, `resolve_market`'s live web/LLM
-  path, and cross-validator Equivalence Principle behavior have not been exercised end-to-end from
-  here yet.
 - **No on-chain market index** — the contract is keyed by market id, not enumerable. `/markets`
-  currently discovers markets through `get_user_markets`; global anonymous discovery requires the
-  on-chain market-id index planned for the next contract deployment.
+  currently discovers markets through `get_user_markets`; global anonymous discovery requires an
+  indexer or future on-chain market-id index.
 - **Wallet layer is intentionally minimal** — a direct `window.ethereum` hook rather than a full
   wagmi provider tree, since `genlayer-js` already owns chain switching (`client.connect()`) and
   transaction signing. `wagmi`/`viem`/`@tanstack/react-query` are installed and available if a

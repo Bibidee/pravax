@@ -547,6 +547,35 @@ class PravaxResolver(gl.Contract):
         self.resolved_flag[market_id] = "1"
         self._bump_stat("markets_finalized")
 
+    @gl.public.write
+    def expire_challenge(self, market_id: str) -> None:
+        """Permissionless liveness backstop for an unreviewed free challenge.
+
+        A challenger cannot keep escrow locked merely by filing and then
+        abandoning a challenge.  Once the already-published challenge window
+        expires, settle conservatively as UNRESOLVED so every staker can
+        recover principal through the normal claim path.
+        """
+        _require(market_id in self.markets, "unknown market_id")
+        _require(self.market_state.get(market_id, "") == "CHALLENGED", "market must be CHALLENGED to expire a challenge")
+        market = json.loads(self.markets[market_id])
+        deadline = market.get("challenge_deadline", "")
+        _require(deadline and _now_iso() >= deadline, "challenge recovery window has not yet closed")
+        resolution = json.loads(self.resolutions[market_id])
+        resolution["verdict"] = "UNRESOLVED"
+        resolution["confidence"] = 0
+        resolution["conflicts"] = list(resolution.get("conflicts", [])) + ["Challenge review did not complete before the recovery deadline."]
+        resolution["reasoning_summary"] = "Challenge review timed out; the market is conservatively settled as UNRESOLVED and all stakers may reclaim principal."
+        resolution["finalized_at"] = _now_iso()
+        resolution["challenge_expired"] = True
+        self.resolutions[market_id] = json.dumps(resolution, sort_keys=True)
+        market["finalized_at"] = _now_iso()
+        market["challenge_expired"] = True
+        self.markets[market_id] = json.dumps(market, sort_keys=True)
+        self.market_state[market_id] = "FINAL"
+        self.resolved_flag[market_id] = "1"
+        self._bump_stat("markets_finalized")
+
     # ------------------------------------------------------------------
     # views
     # ------------------------------------------------------------------

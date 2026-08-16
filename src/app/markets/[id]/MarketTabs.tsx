@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MarketView } from "@/lib/data/market";
 import { ConstitutionPanel } from "@/components/ConstitutionPanel";
@@ -32,6 +32,26 @@ export function MarketTabs({ view }: { view: MarketView }) {
   const total = yes + no;
   const [lockState, setLockState] = useState<TxState>("idle");
   const [lockError, setLockError] = useState<string | null>(null);
+  const [claimable, setClaimable] = useState<bigint>(BigInt(0));
+  const [claimState, setClaimState] = useState<TxState>("idle");
+  const [claimError, setClaimError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (market.state !== "FINAL" || !address || isDemo) return;
+    pravax.getClaimable(id, address).then((value) => setClaimable(BigInt(value))).catch(() => setClaimable(BigInt(0)));
+  }, [address, id, isDemo, market.state]);
+
+  async function handleClaim() {
+    if (!address) return;
+    setClaimState("signing"); setClaimError(null);
+    try {
+      await pravax.claim(address, (window as unknown as { ethereum: unknown }).ethereum, id);
+      setClaimable(BigInt(0)); setClaimState("finalized"); router.refresh();
+    } catch (err) {
+      setClaimState(err instanceof TransactionPendingError ? "pending" : "failed");
+      setClaimError(err instanceof Error ? err.message : "Claim failed");
+    }
+  }
 
   async function handleLock() {
     if (!address) return;
@@ -89,6 +109,15 @@ export function MarketTabs({ view }: { view: MarketView }) {
                   {lockState === "signing" ? "Locking…" : "Lock rules"}
                 </button>
                 <TransactionStatus state={lockState === "finalized" ? "idle" : lockState} detail={lockError ?? undefined} />
+              </div>
+            )}
+            {market.state === "FINAL" && !isDemo && (
+              <div className="space-y-2 rounded-lg border border-border bg-canvas-raised p-4">
+                <p className="text-sm text-ink-muted">Your settlement: <span className="font-semibold text-ink">{formatGen(claimable)} GEN</span></p>
+                <button type="button" onClick={handleClaim} disabled={!address || claimable === BigInt(0) || claimState === "signing"} className="rounded bg-ink px-3 py-1.5 text-sm font-semibold text-canvas disabled:opacity-40">
+                  {!address ? "Connect wallet to claim" : claimable > BigInt(0) ? `Claim ${formatGen(claimable)} GEN` : "No claim available"}
+                </button>
+                <TransactionStatus state={claimState} detail={claimError ?? undefined} />
               </div>
             )}
           </div>
